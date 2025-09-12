@@ -4,6 +4,7 @@ package com.example.codesys.service.impl;
 import com.example.codesys.model.TermMatch;
 import com.example.codesys.service.SnomedService;
 import org.apache.commons.text.similarity.JaroWinklerSimilarity;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
@@ -14,6 +15,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@Primary
 public class LocalSnomedService implements SnomedService {
 
     private static class Entry {

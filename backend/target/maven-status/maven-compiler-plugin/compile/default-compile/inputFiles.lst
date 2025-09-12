@@ -1,0 +1,17 @@
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/CodesysApplication.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/controller/AiController.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/controller/TermsController.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/model/AiDefinitionEntity.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/model/AiDefinitionRequest.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/model/AiDefinitionResponse.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/model/TermMatch.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/model/TermMatchEntity.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/model/TermMatchResponse.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/model/TermRequest.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/repository/AiDefinitionRepository.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/repository/TermMatchRepository.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/AiService.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/SnomedService.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/FhirSnomedService.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/LocalSnomedService.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/repos/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/SpringAiService.java
