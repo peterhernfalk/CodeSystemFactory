@@ -1,0 +1,96 @@
+
+openapi: 3.0.3
+info:
+  title: Code System Builder API
+  version: "1.0.0"
+  description: APIs for matching domain terms with SNOMED CT (Swedish) and generating AI-assisted definitions and relations.
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/terms/match:
+    post:
+      summary: Match input terms to Swedish SNOMED CT concepts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                terms:
+                  type: array
+                  items:
+                    type: string
+              required: [terms]
+      responses:
+        '200':
+          description: List of matches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermMatchResponse'
+  /api/ai/definitions:
+    post:
+      summary: Ask LLM to propose definitions, relations, motivations and use cases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiDefinitionRequest'
+      responses:
+        '200':
+          description: AI-enriched definitions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiDefinitionResponse'
+components:
+  schemas:
+    TermMatch:
+      type: object
+      properties:
+        input: { type: string }
+        matchedSctId: { type: string, nullable: true }
+        preferredTermSv: { type: string, nullable: true }
+        fsnSv: { type: string, nullable: true }
+        similarity: { type: number, format: double }
+        status: { type: string, enum: [MATCHED, NO_MATCH] }
+    TermMatchResponse:
+      type: object
+      properties:
+        matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/TermMatch'
+    AiDefinitionRequest:
+      type: object
+      properties:
+        context: { type: string, nullable: true }
+        terms:
+          type: array
+          items:
+            type: object
+            properties:
+              term: { type: string }
+              snomedId: { type: string, nullable: true }
+            required: [term]
+      required: [terms]
+    AiDefinitionResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              term: { type: string }
+              snomedId: { type: string, nullable: true }
+              definition: { type: string }
+              relations:
+                type: array
+                items: { type: string }
+              motivation: { type: string }
+              useCases:
+                type: array
+                items: { type: string }
