@@ -1,10 +1,6 @@
 package com.example.codesys.controller;
 
-import com.example.codesys.model.TermMatchEntity;
-import com.example.codesys.model.TermMatchResponse;
-import com.example.codesys.model.TermRequest;
-import com.example.codesys.model.TermMatch;
-import com.example.codesys.repository.TermMatchRepository;
+import com.example.codesys.model.*;
 import com.example.codesys.service.SnomedService;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
@@ -18,20 +14,36 @@ import java.util.stream.Collectors;
 @CrossOrigin
 public class TermsController {
     private final SnomedService snomedService;
-    private final TermMatchRepository repo;
 
-    public TermsController(SnomedService snomedService, TermMatchRepository repo){
+    public TermsController(SnomedService snomedService){
         this.snomedService = snomedService;
-        this.repo = repo;
     }
 
     @PostMapping(value="/match", consumes=MediaType.APPLICATION_JSON_VALUE, produces=MediaType.APPLICATION_JSON_VALUE)
     public TermMatchResponse match(@Valid @RequestBody TermRequest request){
         List<TermMatch> matches = snomedService.matchTerms(request.terms());
-        List<TermMatchEntity> entities = matches.stream()
-                .map(m -> new TermMatchEntity(m.input(), m.matchedSctId(), m.preferredTermSv(), m.fsnSv(), m.similarity(), m.status()))
+        
+        // Separate matched and unmatched terms
+        List<MatchedTerm> matched = matches.stream()
+                .filter(m -> "MATCHED".equals(m.status()))
+                .map(m -> new MatchedTerm(
+                    m.input(),
+                    m.matchedSctId(),
+                    m.preferredTermSv(),
+                    m.fsnSv(),
+                    m.similarity(),
+                    null // Description can be added later if needed
+                ))
                 .collect(Collectors.toList());
-        repo.saveAll(entities);
-        return new TermMatchResponse(matches);
+        
+        List<UnmatchedTerm> unmatched = matches.stream()
+                .filter(m -> "NO_MATCH".equals(m.status()))
+                .map(m -> new UnmatchedTerm(
+                    m.input(),
+                    "No match found in SNOMED CT (similarity < 0.75)"
+                ))
+                .collect(Collectors.toList());
+        
+        return new TermMatchResponse(matched, unmatched);
     }
 }

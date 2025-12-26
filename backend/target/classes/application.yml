@@ -1,21 +1,9 @@
 server:
-  port: 8080
+  port: ${PORT:8080}
 
 spring:
   application:
     name: codesys-backend
-  datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:codesys}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres}
-  jpa:
-    hibernate:
-      ddl-auto: update
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
-    show-sql: true
   ai:
     openai:
       api-key: ${OPENAI_API_KEY:}
@@ -28,4 +16,27 @@ ai:
 
 fhir:
   server:
-    url: ${FHIR_SERVER_URL:}
+    url: ${FHIR_SERVER_URL:https://snowstorm-training.snomedtools.org/fhir}
+
+snomed:
+  #branch: ${SNOMED_BRANCH:MAIN}
+  #language: ${SNOMED_LANGUAGE:en}
+  #language-refset: ${SNOMED_LANGUAGE_REFSET:}
+  #fallback-to-english: ${SNOMED_FALLBACK_TO_ENGLISH:true}
+  branch: MAIN
+  language: sv
+  language-refset: 
+  fallback-to-english: true
+
+recommendation:
+  # Use hybrid recommendation approach (combines multiple strategies)
+  use-hybrid: true
+  # Fuzzy matching: candidates with similarity in this range will be recommended
+  fuzzy-match:
+    min-similarity: 0.4
+    max-similarity: 0.6
+  # Hierarchical search: maximum number of parent/child concepts to suggest
+  hierarchical:
+    max-results: 10
+  # Use AI agent as fallback for unmatched terms after other strategies
+  ai-fallback: true

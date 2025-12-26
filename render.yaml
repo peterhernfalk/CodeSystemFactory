@@ -1,0 +1,37 @@
+services:
+  # Backend Service
+  - type: web
+    name: codesys-backend
+    env: java
+    region: frankfurt
+    plan: free
+    buildCommand: cd backend && mvn clean package -DskipTests
+    startCommand: cd backend && java -jar target/codesys-backend-0.0.1-SNAPSHOT.jar
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: OPENAI_API_KEY
+        sync: false  # Set this in Render dashboard
+      - key: FHIR_SERVER_URL
+        value: https://snowstorm-training.snomedtools.org/fhir
+      - key: JAVA_VERSION
+        value: 17
+
+  # Frontend Service (Static Site)
+  - type: web
+    name: codesys-frontend
+    env: static
+    region: frankfurt
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: codesys-backend
+          property: host
+        # This will be set automatically to the backend URL (e.g., https://codesys-backend.onrender.com)
+      - key: NODE_VERSION
+        value: 18
+

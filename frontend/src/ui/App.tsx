@@ -1,46 +1,317 @@
 
 import React, { useState } from 'react'
 import { MatchResults } from './MatchResults'
-import { AiResults } from './AiResults'
+import { AiRecommendations } from './AiRecommendations'
+import { CodeSystemBuilder } from './CodeSystemBuilder'
+import { API_BASE_URL } from '../config/api'
+
+interface MatchedTerm {
+  inputTerm: string
+  snomedId: string
+  preferredTerm: string
+  fsn: string
+  similarity: number
+  description: string | null
+}
+
+interface UnmatchedTerm {
+  inputTerm: string
+  reason: string
+}
+
+interface Recommendation {
+  inputTerm: string
+  recommendedSnomedId: string
+  recommendedTerm: string
+  fsn: string
+  confidence: number
+  reason: string
+  definition: string
+  relations: string[]
+}
+
+interface SuggestedTerm {
+  snomedId: string
+  term: string
+  fsn: string
+  reason: string
+  definition: string
+  relations: string[]
+}
+
+interface CodeSystemMetadata {
+  name: string
+  version: string
+  description: string
+  publisher: string
+  contact: string
+}
 
 export default function App(){
   const [termsText, setTermsText] = useState('MRI Heart\nDiabetes\nHeart attack')
-  const [matches, setMatches] = useState<any[] | null>(null)
-  const [ai, setAi] = useState<any | null>(null)
+  const [matchedTerms, setMatchedTerms] = useState<MatchedTerm[]>([])
+  const [unmatchedTerms, setUnmatchedTerms] = useState<UnmatchedTerm[]>([])
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([])
+  const [suggestedAdditional, setSuggestedAdditional] = useState<SuggestedTerm[]>([])
+  const [selectedSuggested, setSelectedSuggested] = useState<Set<number>>(new Set())
+  const [codeSystem, setCodeSystem] = useState<any>(null)
+  const [metadata, setMetadata] = useState<CodeSystemMetadata>({
+    name: 'Swedish Cardiology Terms',
+    version: '1.0.0',
+    description: '',
+    publisher: '',
+    contact: ''
+  })
+  const [showMetadataForm, setShowMetadataForm] = useState(false)
 
   const callMatch = async () => {
     const terms = termsText.split(/\n+/).map(t => t.trim()).filter(Boolean)
-    const res = await fetch('/api/terms/match', {
+    const res = await fetch(`${API_BASE_URL}/terms/match`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ terms })
     })
     const data = await res.json()
-    setMatches(data.matches)
+    setMatchedTerms(data.matched || [])
+    setUnmatchedTerms(data.unmatched || [])
+    setRecommendations([])
+    setSuggestedAdditional([])
   }
 
-  const callAi = async () => {
-    if(!matches) return
-    const terms = matches.map(m => ({term: m.input, snomedId: m.matchedSctId || null}))
-    const res = await fetch('/api/ai/definitions', {
+  const callAiRecommend = async () => {
+    if(unmatchedTerms.length === 0 && matchedTerms.length === 0) return
+    
+    const unmatchedTermList = unmatchedTerms.map(u => u.inputTerm)
+    const matchedSnomedIds = matchedTerms.map(m => m.snomedId)
+    
+    const res = await fetch(`${API_BASE_URL}/ai/recommend`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ terms, context: 'Svensk vårdterminologi' })
+      body: JSON.stringify({ 
+        unmatchedTerms: unmatchedTermList,
+        matchedSnomedIds: matchedSnomedIds,
+        context: 'Swedish healthcare terminology'
+      })
     })
     const data = await res.json()
-    setAi(data)
+    setRecommendations(data.recommendations || [])
+    setSuggestedAdditional(data.suggestedAdditional || [])
+  }
+
+  const buildCodeSystem = async () => {
+    if (!showMetadataForm) {
+      setShowMetadataForm(true)
+      return
+    }
+
+    const matchedForBuild = matchedTerms.map(m => ({
+      inputTerm: m.inputTerm,
+      snomedId: m.snomedId,
+      preferredTerm: m.preferredTerm,
+      fsn: m.fsn,
+      description: m.description
+    }))
+
+    const recommendedForBuild = recommendations.map(r => ({
+      inputTerm: r.inputTerm,
+      snomedId: r.recommendedSnomedId,
+      recommendedTerm: r.recommendedTerm,
+      fsn: r.fsn,
+      definition: r.definition,
+      relations: r.relations
+    }))
+
+    const selectedSuggestedForBuild = Array.from(selectedSuggested).map(i => ({
+      snomedId: suggestedAdditional[i].snomedId,
+      term: suggestedAdditional[i].term,
+      fsn: suggestedAdditional[i].fsn,
+      reason: suggestedAdditional[i].reason,
+      definition: suggestedAdditional[i].definition,
+      relations: suggestedAdditional[i].relations
+    }))
+
+    const res = await fetch(`${API_BASE_URL}/codesystems/build`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        metadata,
+        matchedTerms: matchedForBuild,
+        recommendedTerms: recommendedForBuild,
+        suggestedTerms: selectedSuggestedForBuild
+      })
+    })
+    const data = await res.json()
+    setCodeSystem(data.codeSystem)
+    setShowMetadataForm(false)
+  }
+
+  const exportCodeSystem = async (format: 'FHIR' | 'CSV' | 'EXCEL') => {
+    if(!codeSystem) return
+
+    const res = await fetch(`${API_BASE_URL}/codesystems/export`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        codeSystem,
+        format
+      })
+    })
+
+    const blob = await res.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${codeSystem.name}_${codeSystem.version}.${format === 'FHIR' ? 'json' : format === 'CSV' ? 'csv' : 'xlsx'}`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
   }
 
   return (
-    <div style={{maxWidth: 900, margin: '2rem auto', fontFamily: 'system-ui, sans-serif'}}>
+    <div style={{maxWidth: 1200, margin: '2rem auto', fontFamily: 'system-ui, sans-serif', padding: '0 1rem'}}>
       <h1>SNOMED Code System Builder</h1>
-      <p>Paste one term per line. Click Match to find Swedish SNOMED concepts, then Ask AI for definitions, relations and use cases.</p>
-      <textarea value={termsText} onChange={e=>setTermsText(e.target.value)} rows={8} style={{width:'100%'}} />
-      <div style={{marginTop: 8, display:'flex', gap:8}}>
-        <button onClick={callMatch}>Match terms</button>
-        <button onClick={callAi} disabled={!matches}>Ask AI</button>
+      <p>Enter terms, match with SNOMED CT, get AI recommendations, and export your code system.</p>
+      
+      <div style={{marginTop: 16}}>
+        <label><strong>Enter terms (one per line):</strong></label>
+        <textarea 
+          value={termsText} 
+          onChange={e=>setTermsText(e.target.value)} 
+          rows={8} 
+          style={{width:'100%', marginTop: 8, padding: 8, fontFamily: 'monospace'}} 
+        />
+        <button onClick={callMatch} style={{marginTop: 8, padding: '8px 16px'}}>
+          Match Terms
+        </button>
       </div>
-      {matches && <MatchResults items={matches} />}
-      {ai && <AiResults data={ai} />}
-      <footer style={{marginTop: 24, opacity: 0.7}}>Backend at <code>http://localhost:8080</code></footer>
+
+      {(matchedTerms.length > 0 || unmatchedTerms.length > 0) && (
+        <MatchResults 
+          matched={matchedTerms} 
+          unmatched={unmatchedTerms}
+          onMatchedChange={setMatchedTerms}
+          onUnmatchedChange={setUnmatchedTerms}
+          onRecommend={callAiRecommend}
+        />
+      )}
+
+      {(recommendations.length > 0 || suggestedAdditional.length > 0) && (
+        <>
+          <AiRecommendations 
+            recommendations={recommendations}
+            suggestedAdditional={suggestedAdditional}
+            selectedSuggested={selectedSuggested}
+            onRecommendationsChange={setRecommendations}
+            onSuggestedChange={setSuggestedAdditional}
+            onSelectedSuggestedChange={setSelectedSuggested}
+            onBuild={buildCodeSystem}
+          />
+          
+          {showMetadataForm && (
+            <div style={{marginTop: 24, border: '2px solid #007bff', padding: 16, borderRadius: 8, backgroundColor: '#f0f8ff'}}>
+              <h3>Code System Metadata</h3>
+              <p style={{fontSize: '0.9em', color: '#666', marginBottom: 16}}>
+                Enter metadata for your code system before building
+              </p>
+              <div style={{display: 'grid', gap: 12}}>
+                <div>
+                  <label style={{display: 'block', marginBottom: 4, fontWeight: 'bold'}}>
+                    Name <span style={{color: 'red'}}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={metadata.name}
+                    onChange={e => setMetadata({...metadata, name: e.target.value})}
+                    style={{width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc'}}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{display: 'block', marginBottom: 4, fontWeight: 'bold'}}>
+                    Version <span style={{color: 'red'}}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={metadata.version}
+                    onChange={e => setMetadata({...metadata, version: e.target.value})}
+                    style={{width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc'}}
+                    placeholder="1.0.0"
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{display: 'block', marginBottom: 4, fontWeight: 'bold'}}>Description</label>
+                  <textarea
+                    value={metadata.description}
+                    onChange={e => setMetadata({...metadata, description: e.target.value})}
+                    style={{width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc', minHeight: '80px'}}
+                    placeholder="Description of the code system"
+                  />
+                </div>
+                <div>
+                  <label style={{display: 'block', marginBottom: 4, fontWeight: 'bold'}}>Publisher</label>
+                  <input
+                    type="text"
+                    value={metadata.publisher}
+                    onChange={e => setMetadata({...metadata, publisher: e.target.value})}
+                    style={{width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc'}}
+                    placeholder="Organization or individual"
+                  />
+                </div>
+                <div>
+                  <label style={{display: 'block', marginBottom: 4, fontWeight: 'bold'}}>Contact</label>
+                  <input
+                    type="text"
+                    value={metadata.contact}
+                    onChange={e => setMetadata({...metadata, contact: e.target.value})}
+                    style={{width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc'}}
+                    placeholder="Email or contact information"
+                  />
+                </div>
+              </div>
+              <div style={{marginTop: 16, display: 'flex', gap: 8}}>
+                <button
+                  onClick={buildCodeSystem}
+                  disabled={!metadata.name || !metadata.version}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: metadata.name && metadata.version ? '#28a745' : '#ccc',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: metadata.name && metadata.version ? 'pointer' : 'not-allowed',
+                    fontSize: '1em'
+                  }}
+                >
+                  Build Code System
+                </button>
+                <button
+                  onClick={() => setShowMetadataForm(false)}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontSize: '1em'
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {codeSystem && (
+        <CodeSystemBuilder 
+          codeSystem={codeSystem}
+          onExport={exportCodeSystem}
+        />
+      )}
+
+      <footer style={{marginTop: 24, opacity: 0.7, fontSize: '0.9em'}}>
+        Backend API at <code>{API_BASE_URL}</code>
+      </footer>
     </div>
   )
 }

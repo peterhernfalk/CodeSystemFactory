@@ -15,7 +15,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-@Primary
 public class LocalSnomedService implements SnomedService {
 
     private static class Entry {

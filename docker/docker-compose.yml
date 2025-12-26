@@ -1,0 +1,30 @@
+version: '3'
+
+services:
+  backend:
+    build: ../backend/
+    image: CodeSystemFactory/api
+    restart: always
+    ports:
+      - 8085:8085
+    networks:
+      - codesystemfactory-network
+      #environment:
+      # Se dhospadmin.xml för konfig Socialstyrelsen way i deras miljöer.
+    container_name: codesystemfactory-api
+
+  frontend:
+    build: ../frontend/
+    image: CodeSystemFactory/frontend
+    restart: always
+    ports:
+      - 8085:8085
+    networks:
+      - codesystemfactory-network
+      #environment:
+      # Se dhospadmin.xml för konfig Socialstyrelsen way i deras miljöer.
+    container_name: codesystemfactory-ui
+
+  networks:
+    codesystemfactory-network:
+      driver: bridge

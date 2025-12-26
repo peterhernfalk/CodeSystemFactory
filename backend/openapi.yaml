@@ -1,37 +1,59 @@
-
 openapi: 3.0.3
 info:
-  title: Code System Builder API
-  version: "1.0.0"
-  description: APIs for matching domain terms with SNOMED CT (Swedish) and generating AI-assisted definitions and relations.
+  title: Code System Builder API (Stateless)
+  version: "2.0.0"
+  description: Stateless APIs for matching domain terms with SNOMED CT (Swedish), generating AI-assisted recommendations, and exporting code systems.
 servers:
   - url: http://localhost:8080
 paths:
   /api/terms/match:
     post:
       summary: Match input terms to Swedish SNOMED CT concepts
+      description: Matches terms against SNOMED CT and returns separated matched and unmatched results
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                terms:
-                  type: array
-                  items:
-                    type: string
-              required: [terms]
+              $ref: '#/components/schemas/TermMatchRequest'
+            example:
+              terms: ["Diabetes", "Heart attack", "Unknown term"]
       responses:
         '200':
-          description: List of matches
+          description: Matching results with separated matched and unmatched terms
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TermMatchResponse'
+        '400':
+          description: Validation error
+  /api/ai/recommend:
+    post:
+      summary: Get AI recommendations for unmatched terms and complementary codes
+      description: AI agent analyzes unmatched terms and existing matches to recommend SNOMED codes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiRecommendationRequest'
+            example:
+              unmatchedTerms: ["Unknown term", "Another term"]
+              matchedSnomedIds: ["73211009", "22298006"]
+              context: "Swedish cardiology terminology"
+      responses:
+        '200':
+          description: AI recommendations for unmatched terms and additional suggestions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiRecommendationResponse'
+        '400':
+          description: Validation error
   /api/ai/definitions:
     post:
-      summary: Ask LLM to propose definitions, relations, motivations and use cases
+      summary: Get AI definitions, relations, motivations and use cases for terms
+      description: AI agent provides definitions and context for matched SNOMED codes
       requestBody:
         required: true
         content:
@@ -45,35 +67,210 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AiDefinitionResponse'
+  /api/codesystems/build:
+    post:
+      summary: Build a code system from matched and recommended terms
+      description: Combines matched SNOMED terms and AI recommendations into a structured code system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CodeSystemBuildRequest'
+      responses:
+        '200':
+          description: Built code system structure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodeSystemBuildResponse'
+        '400':
+          description: Validation error
+  /api/codesystems/export:
+    post:
+      summary: Export code system in various formats
+      description: Exports code system as FHIR JSON, CSV, or Excel file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CodeSystemExportRequest'
+      responses:
+        '200':
+          description: Exported code system file
+          content:
+            application/json:
+              schema:
+                type: object
+                description: FHIR CodeSystem resource (when format is FHIR)
+            text/csv:
+              schema:
+                type: string
+                description: CSV file content (when format is CSV)
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+                description: Excel file (when format is EXCEL)
+        '400':
+          description: Validation error
+        '500':
+          description: Export error
 components:
   schemas:
-    TermMatch:
+    TermMatchRequest:
       type: object
+      required: [terms]
       properties:
-        input: { type: string }
-        matchedSctId: { type: string, nullable: true }
-        preferredTermSv: { type: string, nullable: true }
-        fsnSv: { type: string, nullable: true }
-        similarity: { type: number, format: double }
-        status: { type: string, enum: [MATCHED, NO_MATCH] }
+        terms:
+          type: array
+          items:
+            type: string
+          description: List of terms to match against SNOMED CT
     TermMatchResponse:
       type: object
       properties:
-        matches:
+        matched:
           type: array
           items:
-            $ref: '#/components/schemas/TermMatch'
+            $ref: '#/components/schemas/MatchedTerm'
+        unmatched:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnmatchedTerm'
+    MatchedTerm:
+      type: object
+      properties:
+        inputTerm:
+          type: string
+          description: Original input term
+        snomedId:
+          type: string
+          description: Matched SNOMED CT concept ID
+        preferredTerm:
+          type: string
+          description: Preferred term in Swedish
+        fsn:
+          type: string
+          description: Fully specified name
+        similarity:
+          type: number
+          format: double
+          description: Similarity score (0.0 to 1.0)
+        description:
+          type: string
+          nullable: true
+          description: Description of the matched concept
+    UnmatchedTerm:
+      type: object
+      properties:
+        inputTerm:
+          type: string
+          description: Original input term that was not matched
+        reason:
+          type: string
+          description: Reason why no match was found
+    AiRecommendationRequest:
+      type: object
+      required: [unmatchedTerms, matchedSnomedIds]
+      properties:
+        unmatchedTerms:
+          type: array
+          items:
+            type: string
+          description: Terms that were not matched to SNOMED CT
+        matchedSnomedIds:
+          type: array
+          items:
+            type: string
+          description: SNOMED IDs that were successfully matched
+        context:
+          type: string
+          nullable: true
+          description: Context for recommendations (e.g., "Swedish cardiology terminology")
+    AiRecommendationResponse:
+      type: object
+      properties:
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Recommendation'
+          description: Recommendations for unmatched terms
+        suggestedAdditional:
+          type: array
+          items:
+            $ref: '#/components/schemas/SuggestedTerm'
+          description: Additional SNOMED codes suggested to complement the matched set
+    Recommendation:
+      type: object
+      properties:
+        inputTerm:
+          type: string
+          description: Original unmatched term
+        recommendedSnomedId:
+          type: string
+          description: Recommended SNOMED CT concept ID
+        recommendedTerm:
+          type: string
+          description: Recommended term name
+        fsn:
+          type: string
+          description: Fully specified name
+        confidence:
+          type: number
+          format: double
+          description: Confidence score (0.0 to 1.0)
+        reason:
+          type: string
+          description: Explanation for the recommendation
+        definition:
+          type: string
+          description: Definition of the recommended concept
+        relations:
+          type: array
+          items:
+            type: string
+          description: SNOMED relations (e.g., "is-a: Disorder")
+    SuggestedTerm:
+      type: object
+      properties:
+        snomedId:
+          type: string
+          description: SNOMED CT concept ID
+        term:
+          type: string
+          description: Term name
+        fsn:
+          type: string
+          description: Fully specified name
+        reason:
+          type: string
+          description: Why this term is suggested
+        definition:
+          type: string
+          description: Definition of the concept
+        relations:
+          type: array
+          items:
+            type: string
+          description: SNOMED relations
     AiDefinitionRequest:
       type: object
       properties:
-        context: { type: string, nullable: true }
+        context:
+          type: string
+          nullable: true
         terms:
           type: array
           items:
             type: object
             properties:
-              term: { type: string }
-              snomedId: { type: string, nullable: true }
+              term:
+                type: string
+              snomedId:
+                type: string
+                nullable: true
             required: [term]
       required: [terms]
     AiDefinitionResponse:
@@ -84,13 +281,159 @@ components:
           items:
             type: object
             properties:
-              term: { type: string }
-              snomedId: { type: string, nullable: true }
-              definition: { type: string }
+              term:
+                type: string
+              snomedId:
+                type: string
+                nullable: true
+              definition:
+                type: string
               relations:
                 type: array
-                items: { type: string }
-              motivation: { type: string }
+                items:
+                  type: string
+              motivation:
+                type: string
               useCases:
                 type: array
-                items: { type: string }
+                items:
+                  type: string
+    CodeSystemBuildRequest:
+      type: object
+      required: [metadata, matchedTerms, recommendedTerms]
+      properties:
+        metadata:
+          $ref: '#/components/schemas/CodeSystemMetadata'
+        matchedTerms:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchedTermForBuild'
+        recommendedTerms:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecommendedTermForBuild'
+    CodeSystemMetadata:
+      type: object
+      required: [name, version]
+      properties:
+        name:
+          type: string
+          description: Code system name
+        version:
+          type: string
+          description: Version identifier
+        description:
+          type: string
+          nullable: true
+          description: Description of the code system
+        publisher:
+          type: string
+          nullable: true
+          description: Publisher name
+        contact:
+          type: string
+          nullable: true
+          description: Contact information
+    MatchedTermForBuild:
+      type: object
+      required: [inputTerm, snomedId, preferredTerm]
+      properties:
+        inputTerm:
+          type: string
+        snomedId:
+          type: string
+        preferredTerm:
+          type: string
+        fsn:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+    RecommendedTermForBuild:
+      type: object
+      required: [inputTerm, snomedId, recommendedTerm]
+      properties:
+        inputTerm:
+          type: string
+        snomedId:
+          type: string
+        recommendedTerm:
+          type: string
+        fsn:
+          type: string
+          nullable: true
+        definition:
+          type: string
+          nullable: true
+        relations:
+          type: array
+          items:
+            type: string
+    CodeSystemBuildResponse:
+      type: object
+      properties:
+        codeSystem:
+          $ref: '#/components/schemas/CodeSystem'
+    CodeSystem:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+          nullable: true
+        publisher:
+          type: string
+          nullable: true
+        contact:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CodeSystemItem'
+    CodeSystemItem:
+      type: object
+      properties:
+        code:
+          type: string
+          description: SNOMED ID or custom code
+        display:
+          type: string
+          description: Display name
+        definition:
+          type: string
+          nullable: true
+          description: Definition text
+        relations:
+          type: array
+          items:
+            type: string
+          description: SNOMED relations
+        source:
+          type: string
+          enum: [SNOMED_MATCH, AI_RECOMMENDATION]
+          description: Source of the item
+    CodeSystemExportRequest:
+      type: object
+      required: [codeSystem, format]
+      properties:
+        codeSystem:
+          $ref: '#/components/schemas/CodeSystem'
+        format:
+          type: string
+          enum: [FHIR, CSV, EXCEL]
+          description: Export format
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
