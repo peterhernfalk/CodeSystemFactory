@@ -6,7 +6,10 @@ spring:
     name: codesys-backend
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY:}
+      # Provide a mock API key for development when OPENAI_API_KEY is not set
+      # Spring AI needs this to initialize, but it won't be used when ai.enabled=false
+      # Format: sk- followed by alphanumeric characters (OpenAI key format)
+      api-key: ${OPENAI_API_KEY:sk-mock-dev-key-1234567890123456789012345678901234567890}
       chat:
         options:
           model: gpt-4o-mini
@@ -40,3 +43,16 @@ recommendation:
     max-results: 10
   # Use AI agent as fallback for unmatched terms after other strategies
   ai-fallback: true
+
+# SpringDoc OpenAPI configuration
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    # Additional Swagger UI configuration
+    try-it-out-enabled: true
+    filter: true
+    display-request-duration: true

@@ -1,7 +1,9 @@
 spring:
   ai:
     openai:
-      api-key: sk-mock-dev-key
+      # Mock API key for development - Spring AI needs this to initialize
+      # It won't be used since ai.enabled=false
+      api-key: sk-mock-dev-key-1234567890123456789012345678901234567890
 
 ai:
   enabled: false
