@@ -78,7 +78,8 @@ export default function App(){
   }
 
   const callAiRecommend = async () => {
-    if(unmatchedTerms.length === 0 && matchedTerms.length === 0) return
+    // Allow AI recommendations even if all terms are matched (for additional suggestions)
+    if(matchedTerms.length === 0) return
     
     const unmatchedTermList = unmatchedTerms.map(u => u.inputTerm)
     const matchedSnomedIds = matchedTerms.map(m => m.snomedId)
@@ -183,13 +184,63 @@ export default function App(){
       </div>
 
       {(matchedTerms.length > 0 || unmatchedTerms.length > 0) && (
-        <MatchResults 
-          matched={matchedTerms} 
-          unmatched={unmatchedTerms}
-          onMatchedChange={setMatchedTerms}
-          onUnmatchedChange={setUnmatchedTerms}
-          onRecommend={callAiRecommend}
-        />
+        <>
+          <MatchResults 
+            matched={matchedTerms} 
+            unmatched={unmatchedTerms}
+            onMatchedChange={setMatchedTerms}
+            onUnmatchedChange={setUnmatchedTerms}
+            onRecommend={callAiRecommend}
+          />
+          
+          {/* Show build button if we have matched terms, even without recommendations */}
+          {matchedTerms.length > 0 && (recommendations.length === 0 && suggestedAdditional.length === 0) && (
+            <div style={{marginTop: 24, padding: 16, border: '1px solid #ddd', borderRadius: 8, backgroundColor: '#f8f9fa'}}>
+              <h3>Ready to Build Code System</h3>
+              <p style={{fontSize: '0.9em', color: '#666', marginBottom: 16}}>
+                You have {matchedTerms.length} matched term{matchedTerms.length !== 1 ? 's' : ''}. 
+                {unmatchedTerms.length > 0 && (
+                  <> You can get AI recommendations for {unmatchedTerms.length} unmatched term{unmatchedTerms.length !== 1 ? 's' : ''}, or build the code system with just the matched terms.</>
+                )}
+                {unmatchedTerms.length === 0 && (
+                  <> All terms are matched. You can build the code system now or get AI recommendations for additional suggestions.</>
+                )}
+              </p>
+              <div style={{display: 'flex', gap: 8}}>
+                <button
+                  onClick={callAiRecommend}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: '#007bff',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontSize: '1em'
+                  }}
+                >
+                  {unmatchedTerms.length > 0 
+                    ? 'Get AI Recommendations for Unmatched Terms'
+                    : 'Get AI Recommendations for Additional Suggestions'}
+                </button>
+                <button
+                  onClick={buildCodeSystem}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontSize: '1em'
+                  }}
+                >
+                  Build Code System with Matched Terms
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {(recommendations.length > 0 || suggestedAdditional.length > 0) && (
