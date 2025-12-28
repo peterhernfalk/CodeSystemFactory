@@ -64,6 +64,15 @@
             </goals>
           </execution>
         </executions>
+        <configuration>
+          <buildInfo>
+            <additionalProperties>
+              <version>${project.version}</version>
+            </additionalProperties>
+          </buildInfo>
+          <!-- Generate build-info.properties -->
+          <generateBuildInfo>true</generateBuildInfo>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

@@ -335,7 +335,8 @@ public class FhirSnomedService implements SnomedService {
                             // Prefer terms that are more commonly used medical terms
                             if (ptLower.contains("mellitus") || ptLower.contains("myocardial") 
                                     || ptLower.contains("cardiac mri") || ptLower.contains("magnetic resonance")) {
-                                score += 0.1; // Boost for standard terms to ensure they win
+                                // Boost for standard terms, but cap at 1.0 (100%)
+                                score = Math.min(score + 0.1, 1.0);
                             }
                         }
                         

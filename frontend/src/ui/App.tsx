@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { MatchResults } from './MatchResults'
 import { AiRecommendations } from './AiRecommendations'
 import { CodeSystemBuilder } from './CodeSystemBuilder'
 import { API_BASE_URL } from '../config/api'
+import { FRONTEND_VERSION, getBackendVersion } from '../config/version'
 
 interface MatchedTerm {
   inputTerm: string
@@ -63,6 +64,12 @@ export default function App(){
     contact: ''
   })
   const [showMetadataForm, setShowMetadataForm] = useState(false)
+  const [backendVersion, setBackendVersion] = useState<string | null>(null)
+
+  // Fetch backend version on mount
+  useEffect(() => {
+    getBackendVersion().then(setBackendVersion)
+  }, [])
 
   const callMatch = async () => {
     const terms = termsText.split(/\n+/).map(t => t.trim()).filter(Boolean)
@@ -360,8 +367,18 @@ export default function App(){
         />
       )}
 
-      <footer style={{marginTop: 24, opacity: 0.7, fontSize: '0.9em'}}>
-        Backend API at <code>{API_BASE_URL}</code>
+      <footer style={{marginTop: 24, padding: '16px 0', borderTop: '1px solid #ddd', opacity: 0.7, fontSize: '0.9em'}}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8}}>
+          <div>
+            Backend API at <code>{API_BASE_URL}</code>
+          </div>
+          <div style={{display: 'flex', gap: 12, alignItems: 'center'}}>
+            <span>Frontend: <strong>v{FRONTEND_VERSION}</strong></span>
+            {backendVersion && (
+              <span>Backend: <strong>v{backendVersion.replace('-SNAPSHOT', '')}</strong></span>
+            )}
+          </div>
+        </div>
       </footer>
     </div>
   )
