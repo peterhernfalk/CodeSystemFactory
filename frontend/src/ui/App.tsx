@@ -201,7 +201,7 @@ export default function App(){
           />
           
           {/* Show build button if we have matched terms, even without recommendations */}
-          {matchedTerms.length > 0 && (recommendations.length === 0 && suggestedAdditional.length === 0) && (
+          {matchedTerms.length > 0 && (recommendations.length === 0 && suggestedAdditional.length === 0) && !showMetadataForm && (
             <div style={{marginTop: 24, padding: 16, border: '1px solid #ddd', borderRadius: 8, backgroundColor: '#f8f9fa'}}>
               <h3>Ready to Build Code System</h3>
               <p style={{fontSize: '0.9em', color: '#666', marginBottom: 16}}>
@@ -243,6 +243,103 @@ export default function App(){
                   }}
                 >
                   Build Code System with Matched Terms
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Show metadata form when showMetadataForm is true, even without recommendations */}
+          {showMetadataForm && (recommendations.length === 0 && suggestedAdditional.length === 0) && (
+            <div style={{marginTop: 24, border: '2px solid #007bff', padding: 16, borderRadius: 8, backgroundColor: '#f0f8ff'}}>
+              <h3>Code System Metadata</h3>
+              <p style={{fontSize: '0.9em', color: '#666', marginBottom: 16}}>
+                Enter metadata for your code system before building
+              </p>
+              <div style={{display: 'grid', gap: 12}}>
+                <div>
+                  <label style={{display: 'block', marginBottom: 4, fontWeight: 'bold'}}>
+                    Name <span style={{color: 'red'}}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={metadata.name}
+                    onChange={e => setMetadata({...metadata, name: e.target.value})}
+                    style={{width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc'}}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{display: 'block', marginBottom: 4, fontWeight: 'bold'}}>
+                    Version <span style={{color: 'red'}}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={metadata.version}
+                    onChange={e => setMetadata({...metadata, version: e.target.value})}
+                    style={{width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc'}}
+                    placeholder="1.0.0"
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{display: 'block', marginBottom: 4, fontWeight: 'bold'}}>Description</label>
+                  <textarea
+                    value={metadata.description}
+                    onChange={e => setMetadata({...metadata, description: e.target.value})}
+                    style={{width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc', minHeight: '80px'}}
+                    placeholder="Description of the code system"
+                  />
+                </div>
+                <div>
+                  <label style={{display: 'block', marginBottom: 4, fontWeight: 'bold'}}>Publisher</label>
+                  <input
+                    type="text"
+                    value={metadata.publisher}
+                    onChange={e => setMetadata({...metadata, publisher: e.target.value})}
+                    style={{width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc'}}
+                    placeholder="Organization or individual"
+                  />
+                </div>
+                <div>
+                  <label style={{display: 'block', marginBottom: 4, fontWeight: 'bold'}}>Contact</label>
+                  <input
+                    type="text"
+                    value={metadata.contact}
+                    onChange={e => setMetadata({...metadata, contact: e.target.value})}
+                    style={{width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc'}}
+                    placeholder="Email or contact information"
+                  />
+                </div>
+              </div>
+              <div style={{marginTop: 16, display: 'flex', gap: 8}}>
+                <button
+                  onClick={buildCodeSystem}
+                  disabled={!metadata.name || !metadata.version}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: metadata.name && metadata.version ? '#28a745' : '#ccc',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: metadata.name && metadata.version ? 'pointer' : 'not-allowed',
+                    fontSize: '1em'
+                  }}
+                >
+                  Build Code System
+                </button>
+                <button
+                  onClick={() => setShowMetadataForm(false)}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontSize: '1em'
+                  }}
+                >
+                  Cancel
                 </button>
               </div>
             </div>
