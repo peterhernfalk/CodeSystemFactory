@@ -24,17 +24,32 @@ public class OpenApiConfig {
     public OpenAPI customOpenAPI() {
         List<Server> servers = new ArrayList<>();
         
-        // Add production server if SERVER_URL is set
-        if (serverUrl != null && !serverUrl.trim().isEmpty()) {
-            servers.add(new Server()
-                    .url(serverUrl)
-                    .description("Production server"));
-        }
+        // Check if we're in production (SERVER_URL is set)
+        boolean isProduction = serverUrl != null && !serverUrl.trim().isEmpty();
         
-        // Always add localhost for local development
-        servers.add(new Server()
-                .url("http://localhost:" + serverPort)
-                .description("Local development server"));
+        if (isProduction) {
+            // In production: Add production server first (so it's the default)
+            // Ensure URL has protocol (https://) if not present
+            String productionUrl = serverUrl.trim();
+            if (!productionUrl.startsWith("http://") && !productionUrl.startsWith("https://")) {
+                productionUrl = "https://" + productionUrl;
+            }
+            
+            servers.add(new Server()
+                    .url(productionUrl)
+                    .description("Production server"));
+            
+            // Optionally add localhost as a secondary option for testing
+            // (commented out to avoid confusion - uncomment if needed)
+            // servers.add(new Server()
+            //         .url("http://localhost:" + serverPort)
+            //         .description("Local development server"));
+        } else {
+            // In development: Only show localhost
+            servers.add(new Server()
+                    .url("http://localhost:" + serverPort)
+                    .description("Local development server"));
+        }
         
         return new OpenAPI()
                 .info(new Info()

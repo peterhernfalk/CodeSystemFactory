@@ -39,9 +39,12 @@ git push -u origin main
 
 6. **Add Environment Variables**:
    - `SPRING_PROFILES_ACTIVE` = `production`
+   - `SERVER_URL` = `https://codesys-backend.onrender.com` (use your actual backend URL - this is used for Swagger UI)
    - `OPENAI_API_KEY` = `<your-openai-api-key>` (if using AI features)
    - `FHIR_SERVER_URL` = `https://snowstorm-training.snomedtools.org/fhir`
    - `JAVA_VERSION` = `17`
+   
+   **Note**: If you're using `render.yaml` for deployment, `SERVER_URL` will be set automatically. Otherwise, set it manually after deployment using the URL from step 9.
 
 7. **Click "Create Web Service"**
 

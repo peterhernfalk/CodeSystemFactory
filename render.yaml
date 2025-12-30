@@ -10,6 +10,12 @@ services:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
+      - key: SERVER_URL
+        fromService:
+          type: web
+          name: codesys-backend
+          property: host
+        # This will be set automatically to the backend URL (e.g., https://codesys-backend.onrender.com)
       - key: OPENAI_API_KEY
         sync: false  # Set this in Render dashboard
       - key: FHIR_SERVER_URL
