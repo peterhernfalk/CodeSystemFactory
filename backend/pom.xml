@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.example</groupId>
   <artifactId>codesys-backend</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>0.0.2-SNAPSHOT</version>
   <name>codesys-backend</name>
   <description>SNOMED CT + AI Code System Builder</description>
   <properties>
@@ -59,19 +59,25 @@
         <version>${spring.boot.version}</version>
         <executions>
           <execution>
+            <id>repackage</id>
             <goals>
               <goal>repackage</goal>
             </goals>
           </execution>
+          <execution>
+            <id>build-info</id>
+            <goals>
+              <goal>build-info</goal>
+            </goals>
+          </execution>
         </executions>
         <configuration>
-          <buildInfo>
-            <additionalProperties>
-              <version>${project.version}</version>
-            </additionalProperties>
-          </buildInfo>
-          <!-- Generate build-info.properties -->
-          <generateBuildInfo>true</generateBuildInfo>
+          <excludes>
+            <exclude>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+            </exclude>
+          </excludes>
         </configuration>
       </plugin>
       <plugin>

@@ -20,6 +20,9 @@ public class OpenApiConfig {
     @Value("${SERVER_URL:}")
     private String serverUrl;
 
+    @Value("${info.build.version:${project.version:0.0.1-SNAPSHOT}}")
+    private String applicationVersion;
+
     @Bean
     public OpenAPI customOpenAPI() {
         List<Server> servers = new ArrayList<>();
@@ -54,7 +57,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Code System Builder API")
-                        .version("2.0.0")
+                        .version(applicationVersion)
                         .description("Stateless APIs for matching domain terms with SNOMED CT (Swedish), " +
                                 "generating AI-assisted recommendations, and exporting code systems.")
                         .contact(new Contact()
