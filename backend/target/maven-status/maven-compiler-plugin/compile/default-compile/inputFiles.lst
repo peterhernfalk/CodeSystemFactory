@@ -1,4 +1,5 @@
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/CodesysApplication.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/config/CorsConfig.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/config/OpenApiConfig.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/controller/AiController.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/controller/AiRecommendationController.java
