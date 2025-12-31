@@ -1,0 +1,26 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  data:
+    elasticsearch:
+      cluster-name: ${ELASTICSEARCH_CLUSTER_NAME:snowstorm-cluster}
+      cluster-nodes: ${ELASTICSEARCH_HOST:localhost}:${ELASTICSEARCH_PORT:9200}
+      repositories:
+        enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  health:
+    elasticsearch:
+      enabled: true
+
+# Snowstorm configuration
+snowstorm:
+  import:
+    rf2:
+      path: ${SNOMED_IMPORT_PATH:/app/imports}
+

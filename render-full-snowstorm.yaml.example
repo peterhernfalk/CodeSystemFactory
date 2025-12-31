@@ -1,0 +1,90 @@
+services:
+  # Backend Service
+  - type: web
+    name: codesys-backend
+    env: java
+    region: frankfurt
+    plan: free
+    buildCommand: cd backend && mvn clean package -DskipTests
+    startCommand: java -jar backend/target/codesys-backend-0.0.2-SNAPSHOT.jar
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: SERVER_URL
+        fromService:
+          type: web
+          name: codesys-backend
+          property: host
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: FHIR_SERVER_URL
+        fromService:
+          type: web
+          name: snowstorm
+          property: host
+        # This will be set automatically to: https://snowstorm.onrender.com/fhir
+      - key: JAVA_VERSION
+        value: 17
+
+  # Frontend Service
+  - type: web
+    name: codesys-frontend
+    env: static
+    region: frankfurt
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: codesys-backend
+          property: host
+      - key: NODE_VERSION
+        value: 18
+
+  # Elasticsearch Service (Required for Full Snowstorm)
+  - type: web
+    name: elasticsearch
+    env: docker
+    region: frankfurt
+    plan: starter  # Requires paid plan - free tier insufficient
+    dockerfilePath: ./elasticsearch/Dockerfile
+    dockerContext: ./elasticsearch
+    healthCheckPath: /_cluster/health
+    envVars:
+      - key: xpack.security.enabled
+        value: false
+      - key: discovery.type
+        value: single-node
+      - key: ES_JAVA_OPTS
+        value: -Xms512m -Xmx512m
+      - key: network.host
+        value: 0.0.0.0
+
+  # Full Snowstorm Service
+  - type: web
+    name: snowstorm
+    env: docker
+    region: frankfurt
+    plan: starter  # Requires paid plan - free tier insufficient
+    dockerfilePath: ./snowstorm/Dockerfile
+    dockerContext: ./snowstorm
+    healthCheckPath: /health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: SERVER_PORT
+        value: 8080
+      - key: ELASTICSEARCH_CLUSTER_NAME
+        value: snowstorm-cluster
+      - key: ELASTICSEARCH_HOST
+        fromService:
+          type: web
+          name: elasticsearch
+          property: host
+      - key: ELASTICSEARCH_PORT
+        value: 9200
+      - key: SNOMED_IMPORT_PATH
+        value: /app/imports
+
