@@ -2,6 +2,7 @@ package com.example.codesys.controller;
 
 import com.example.codesys.model.*;
 import com.example.codesys.service.SnomedService;
+import com.example.codesys.service.SnomedServiceFactory;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -13,14 +14,16 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/terms")
 @CrossOrigin
 public class TermsController {
-    private final SnomedService snomedService;
+    private final SnomedServiceFactory serviceFactory;
 
-    public TermsController(SnomedService snomedService){
-        this.snomedService = snomedService;
+    public TermsController(SnomedServiceFactory serviceFactory){
+        this.serviceFactory = serviceFactory;
     }
 
     @PostMapping(value="/match", consumes=MediaType.APPLICATION_JSON_VALUE, produces=MediaType.APPLICATION_JSON_VALUE)
     public TermMatchResponse match(@Valid @RequestBody TermRequest request){
+        // Get appropriate service based on user selection (defaults to Snowstorm)
+        SnomedService snomedService = serviceFactory.getService(request.server());
         List<TermMatch> matches = snomedService.matchTerms(request.terms());
         
         // Separate matched and unmatched terms

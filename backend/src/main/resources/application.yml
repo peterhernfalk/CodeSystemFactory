@@ -21,6 +21,10 @@ fhir:
   server:
     url: ${FHIR_SERVER_URL:https://snowstorm-training.snomedtools.org/fhir}
 
+# Ontoserver configuration (FHIR R4 terminology server)
+ontoserver:
+  url: ${ONTOSERVER_URL:https://r4.ontoserver.csiro.au/fhir}
+
 snomed:
   #branch: ${SNOMED_BRANCH:MAIN}
   #language: ${SNOMED_LANGUAGE:en}

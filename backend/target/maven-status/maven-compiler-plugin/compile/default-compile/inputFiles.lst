@@ -25,6 +25,7 @@
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/CodeSystemExportService.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/HybridRecommendationService.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/SnomedService.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/SnomedServiceFactory.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/SynonymDatabaseService.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/AiRecommendationServiceImpl.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/CodeSystemBuildServiceImpl.java
@@ -32,5 +33,6 @@
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/FhirSnomedService.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/HybridRecommendationServiceImpl.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/LocalSnomedService.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/OntoserverSnomedService.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/SpringAiService.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/SynonymDatabaseServiceImpl.java

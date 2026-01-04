@@ -65,6 +65,7 @@ export default function App(){
   })
   const [showMetadataForm, setShowMetadataForm] = useState(false)
   const [backendVersion, setBackendVersion] = useState<string | null>(null)
+  const [selectedServer, setSelectedServer] = useState<'snowstorm' | 'ontoserver'>('snowstorm')
 
   // Fetch backend version on mount
   useEffect(() => {
@@ -75,7 +76,10 @@ export default function App(){
     const terms = termsText.split(/\n+/).map(t => t.trim()).filter(Boolean)
     const res = await fetch(`${API_BASE_URL}/terms/match`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ terms })
+      body: JSON.stringify({ 
+        terms,
+        server: selectedServer  // Include server selection
+      })
     })
     const data = await res.json()
     setMatchedTerms(data.matched || [])
@@ -185,9 +189,41 @@ export default function App(){
           rows={8} 
           style={{width:'100%', marginTop: 8, padding: 8, fontFamily: 'monospace'}} 
         />
-        <button onClick={callMatch} style={{marginTop: 8, padding: '8px 16px'}}>
-          Match Terms
-        </button>
+        <div style={{marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap'}}>
+          <label style={{display: 'flex', alignItems: 'center', gap: 8}}>
+            <strong>SNOMED CT Server:</strong>
+            <select 
+              value={selectedServer} 
+              onChange={e => setSelectedServer(e.target.value as 'snowstorm' | 'ontoserver')}
+              style={{
+                padding: '6px 12px', 
+                fontSize: '0.95em', 
+                borderRadius: 4, 
+                border: '1px solid #ddd',
+                backgroundColor: 'white',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="snowstorm">Snowstorm (Default)</option>
+              <option value="ontoserver">Ontoserver (FHIR)</option>
+            </select>
+          </label>
+          <button 
+            onClick={callMatch} 
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontSize: '1em',
+              fontWeight: 'bold'
+            }}
+          >
+            Match Terms
+          </button>
+        </div>
       </div>
 
       {(matchedTerms.length > 0 || unmatchedTerms.length > 0) && (
