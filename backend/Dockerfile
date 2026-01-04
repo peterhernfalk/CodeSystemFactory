@@ -17,7 +17,7 @@ FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
 # Copy the JAR file from builder stage
-COPY --from=builder /app/target/codesys-backend-0.0.2-SNAPSHOT.jar app.jar
+COPY --from=builder /app/target/codesys-backend-0.0.3-SNAPSHOT.jar app.jar
 
 # Expose port (Render will set PORT env var, but we default to 8080)
 EXPOSE 8080
