@@ -11,33 +11,51 @@ if (!fs.existsSync(nativeFile)) {
 
 let content = fs.readFileSync(nativeFile, 'utf8');
 
-// Fix 1: Change const to let and add arm64 override
-if (content.includes('const packageBase = getPackageBase();')) {
+// Fix 1: On darwin, use whichever rollup native package is actually installed
+// (npm often installs only one optional). Then set packageBase from that.
+// Fix path to @rollup (native.js is in rollup/dist so @rollup is ../../@rollup)
+content = content.replace(
+  "path.join(__dirname, '..', '@rollup')",
+  "path.join(__dirname, '..', '..', '@rollup')"
+);
+if (!content.includes('preferredDarwinBase')) {
   content = content.replace(
-    'const packageBase = getPackageBase();',
-    `let packageBase = getPackageBase();
-// Workaround: Force arm64 on darwin arm64 systems
-if (platform === 'darwin' && (arch === 'arm64' || process.arch === 'arm64')) {
-  packageBase = 'darwin-arm64';
-}`
+    'const msvcLinkFilenameByArch = {',
+    `const rollupDir = path.join(__dirname, '..', '..', '@rollup');
+let preferredDarwinBase;
+if (platform === 'darwin') {
+  if (existsSync(path.join(rollupDir, 'rollup-darwin-arm64'))) preferredDarwinBase = 'darwin-arm64';
+  else if (existsSync(path.join(rollupDir, 'rollup-darwin-x64'))) preferredDarwinBase = 'darwin-x64';
+}
+const msvcLinkFilenameByArch = {`
   );
+  content = content.replace(
+    'let packageBase = getPackageBase();\n// Workaround: Force arm64 on darwin arm64 systems\nif (platform === \'darwin\' && (arch === \'arm64\' || process.arch === \'arm64\')) {\n  packageBase = \'darwin-arm64\';\n}',
+    'let packageBase = (platform === \'darwin\' && preferredDarwinBase) ? preferredDarwinBase : getPackageBase();'
+  );
+  // In case the previous patch already ran and left the old pattern
+  content = content.replace(
+    /let packageBase = getPackageBase\(\);\s*\/\/ Workaround[^]*?packageBase = 'darwin-arm64';\s*\}/,
+    'let packageBase = (platform === \'darwin\' && preferredDarwinBase) ? preferredDarwinBase : getPackageBase();'
+  );
+  if (content.includes('const packageBase = getPackageBase();')) {
+    content = content.replace(
+      'const packageBase = getPackageBase();',
+      'let packageBase = (platform === \'darwin\' && preferredDarwinBase) ? preferredDarwinBase : getPackageBase();'
+    );
+  }
 }
 
-// Fix 2: Add fallback in requireWithFriendlyError
-if (!content.includes('// Workaround for npm optional dependencies bug: try arm64')) {
+// Fix 2: Add fallback in requireWithFriendlyError - try the other darwin package if the requested one is missing
+if (!content.includes('// Workaround: try other darwin native package')) {
   const requirePattern = /(const requireWithFriendlyError = id => \{[^]*?try \{[^]*?return require\(id\);[\s\S]*?\} catch \(error\) \{)/;
   const fallbackCode = `$1
-    // Workaround for npm optional dependencies bug: try arm64 if x64 fails on arm64 systems
-    if (id && id.includes('darwin-x64') && (arch === 'arm64' || process.arch === 'arm64')) {
-      try {
-        const arm64Id = id.replace('darwin-x64', 'darwin-arm64');
-        return require(arm64Id);
-      } catch (e) {
-        // Fall through to original error handling
-      }
+    // Workaround: try other darwin native package if missing (npm optional deps bug)
+    if (platform === 'darwin' && id && id.includes('@rollup/rollup-darwin-')) {
+      const other = id.includes('darwin-arm64') ? id.replace('darwin-arm64', 'darwin-x64') : id.replace('darwin-x64', 'darwin-arm64');
+      try { return require(other); } catch (e) { /* fall through */ }
     }
     `;
-  
   if (requirePattern.test(content)) {
     content = content.replace(requirePattern, fallbackCode);
   }
@@ -60,24 +78,10 @@ if (!content.includes("if (platform === 'darwin' && (arch === 'arm64'")) {
 
 fs.writeFileSync(nativeFile, content);
 
-// Also create x64 package from arm64 as a workaround
-const rollupDir = path.join(__dirname, 'node_modules/@rollup');
-const arm64Path = path.join(rollupDir, 'rollup-darwin-arm64');
-const x64Path = path.join(rollupDir, 'rollup-darwin-x64');
-
-if (fs.existsSync(arm64Path) && !fs.existsSync(x64Path)) {
-  // Copy arm64 to x64
-  fs.cpSync(arm64Path, x64Path, { recursive: true });
-  
-  // Update package.json name
-  const x64PackageJson = path.join(x64Path, 'package.json');
-  if (fs.existsSync(x64PackageJson)) {
-    const pkg = JSON.parse(fs.readFileSync(x64PackageJson, 'utf8'));
-    pkg.name = '@rollup/rollup-darwin-x64';
-    fs.writeFileSync(x64PackageJson, JSON.stringify(pkg, null, 2));
-  }
-  console.log('✅ Created rollup-darwin-x64 package from arm64');
-}
-
+// On Apple Silicon (darwin arm64), npm often only installs rollup-darwin-arm64.
+// If Node is running under Rosetta (x64), rollup will ask for darwin-x64 and fail.
+// The native.js patch below forces darwin-arm64 when process.arch is arm64, and
+// has a fallback to try the other package if one is missing. To avoid errors when
+// using Rosetta, run Node natively: arch -arm64 npm run dev
 console.log('✅ Successfully patched rollup native.js for arm64');
 

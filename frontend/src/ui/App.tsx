@@ -65,7 +65,7 @@ export default function App(){
   })
   const [showMetadataForm, setShowMetadataForm] = useState(false)
   const [backendVersion, setBackendVersion] = useState<string | null>(null)
-  const [selectedServer, setSelectedServer] = useState<'snowstorm' | 'ontoserver'>('snowstorm')
+  const [selectedServer, setSelectedServer] = useState<'snowstorm' | 'ontoserver' | 'inera'>('snowstorm')
 
   // Fetch backend version on mount
   useEffect(() => {
@@ -74,6 +74,13 @@ export default function App(){
 
   const callMatch = async () => {
     const terms = termsText.split(/\n+/).map(t => t.trim()).filter(Boolean)
+
+    // Clear previous results immediately while new matching is running
+    setMatchedTerms([])
+    setUnmatchedTerms([])
+    setRecommendations([])
+    setSuggestedAdditional([])
+
     const res = await fetch(`${API_BASE_URL}/terms/match`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ 
@@ -84,8 +91,6 @@ export default function App(){
     const data = await res.json()
     setMatchedTerms(data.matched || [])
     setUnmatchedTerms(data.unmatched || [])
-    setRecommendations([])
-    setSuggestedAdditional([])
   }
 
   const callAiRecommend = async () => {
@@ -194,7 +199,7 @@ export default function App(){
             <strong>SNOMED CT Server:</strong>
             <select 
               value={selectedServer} 
-              onChange={e => setSelectedServer(e.target.value as 'snowstorm' | 'ontoserver')}
+              onChange={e => setSelectedServer(e.target.value as 'snowstorm' | 'ontoserver' | 'inera')}
               style={{
                 padding: '6px 12px', 
                 fontSize: '0.95em', 
@@ -206,6 +211,7 @@ export default function App(){
             >
               <option value="snowstorm">Snowstorm (Default)</option>
               <option value="ontoserver">Ontoserver (FHIR)</option>
+              <option value="inera">Inera Terminologitjänsten (Swedish)</option>
             </select>
           </label>
           <button 

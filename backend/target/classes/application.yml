@@ -25,6 +25,11 @@ fhir:
 ontoserver:
   url: ${ONTOSERVER_URL:https://r4.ontoserver.csiro.au/fhir}
 
+# Inera Terminologitjänsten (Swedish SNOMED CT FHIR API)
+inera:
+  url: ${INERA_URL:https://terminologitjansten.inera.se/fhir}
+  valueset-url: ${INERA_VALUESET_URL:http://snomed.info/sct/45991000052106/version/20251130?fhir_vs}
+
 snomed:
   #branch: ${SNOMED_BRANCH:MAIN}
   #language: ${SNOMED_LANGUAGE:en}

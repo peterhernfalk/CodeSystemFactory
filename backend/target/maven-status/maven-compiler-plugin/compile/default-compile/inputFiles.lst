@@ -32,6 +32,7 @@
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/CodeSystemExportServiceImpl.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/FhirSnomedService.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/HybridRecommendationServiceImpl.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/IneraSnomedService.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/LocalSnomedService.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/OntoserverSnomedService.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/service/impl/SpringAiService.java

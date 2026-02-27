@@ -30,6 +30,7 @@ public class OntoserverSnomedService implements SnomedService {
 
     public OntoserverSnomedService(
             @Value("${ontoserver.url:https://r4.ontoserver.csiro.au/fhir}") String ontoserverUrl,
+            //@Value("${ontoserver.url:https://tx-nordics.fhir.org/fhir}") String ontoserverUrl,
             @Value("${snomed.language:en}") String language,
             @Value("${snomed.fallback-to-english:true}") boolean fallbackToEnglish) {
         

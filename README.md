@@ -86,6 +86,9 @@ Frontend will start on `http://localhost:5173`
 
 The Vite dev server is configured to proxy `/api` requests to the backend.
 
+**Apple Silicon (M1/M2/M3)**: If you see a Rollup error like `Cannot find module @rollup/rollup-darwin-x64` or `incompatible architecture (have 'arm64', need 'x86_64')`, run the dev server with native Node so it uses the arm64 build:  
+`arch -arm64 npm run dev`
+
 ### Access Points
 
 - **Frontend**: http://localhost:5173
