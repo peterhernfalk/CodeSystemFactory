@@ -50,6 +50,9 @@ recommendation:
   # Hierarchical search: maximum number of parent/child concepts to suggest
   hierarchical:
     max-results: 10
+    # Multi-hop hierarchy expansion depth used to widen the candidate pool.
+    # hop-depth=1 equals old behavior (parents + children). hop-depth=2 adds grandparents/grandchildren.
+    hop-depth: ${RECOMMENDATION_HIERARCHICAL_HOP_DEPTH:2}
   # Use AI agent as fallback for unmatched terms after other strategies
   ai-fallback: true
 

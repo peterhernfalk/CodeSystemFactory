@@ -1,0 +1,5 @@
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Tue Jan 02 10:10:35 CET 2024
+@default-spring-releases-https\://repo.spring.io/libs-release/.lastUpdated=1704186635518
+https\://repo.maven.apache.org/maven2/.lastUpdated=1704186635529
+https\://repo.spring.io/libs-release/.error=Could not transfer artifact org.junit.jupiter\:junit-jupiter-api\:pom\:5.7.1 from/to spring-releases (https\://repo.spring.io/libs-release)\: status code\: 401, reason phrase\:  (401)

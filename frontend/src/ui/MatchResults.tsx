@@ -8,6 +8,7 @@ interface MatchedTerm {
   fsn: string
   similarity: number
   description: string | null
+  matchedByServer: string
 }
 
 interface UnmatchedTerm {
@@ -57,7 +58,7 @@ export function MatchResults({matched, unmatched, onMatchedChange, onUnmatchedCh
           <table border={1} cellPadding={8} style={{width:'100%', borderCollapse:'collapse', marginTop:8}}>
             <thead>
               <tr style={{backgroundColor: '#f0f0f0'}}>
-                <th>Input Term</th><th>SNOMED ID</th><th>Preferred Term</th><th>FSN</th><th>Similarity</th><th>Actions</th>
+                <th>Input Term</th><th>SNOMED ID</th><th>Preferred Term</th><th>FSN</th><th>Similarity</th><th>Matched By</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -97,6 +98,7 @@ export function MatchResults({matched, unmatched, onMatchedChange, onUnmatchedCh
                   </td>
                   <td>{m.fsn}</td>
                   <td>{(m.similarity * 100).toFixed(0)}%</td>
+                  <td>{m.matchedByServer}</td>
                   <td>
                     <button 
                       onClick={() => removeMatched(i)}

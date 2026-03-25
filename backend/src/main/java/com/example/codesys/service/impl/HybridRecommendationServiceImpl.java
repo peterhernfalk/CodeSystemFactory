@@ -39,6 +39,7 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
     private final double fuzzyMatchMinSimilarity;
     private final double fuzzyMatchMaxSimilarity;
     private final int maxHierarchicalResults;
+    private final int hierarchyHopDepth;
     private final boolean useAiFallback;
     private final boolean aiEnabled;
     
@@ -52,6 +53,7 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
             @Value("${recommendation.fuzzy-match.min-similarity:0.4}") double fuzzyMatchMinSimilarity,
             @Value("${recommendation.fuzzy-match.max-similarity:0.6}") double fuzzyMatchMaxSimilarity,
             @Value("${recommendation.hierarchical.max-results:10}") int maxHierarchicalResults,
+            @Value("${recommendation.hierarchical.hop-depth:2}") int hierarchyHopDepth,
             @Value("${recommendation.ai-fallback:true}") boolean useAiFallback,
             @Value("${ai.enabled:true}") boolean aiEnabled) {
         
@@ -63,6 +65,7 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
         this.fuzzyMatchMinSimilarity = fuzzyMatchMinSimilarity;
         this.fuzzyMatchMaxSimilarity = fuzzyMatchMaxSimilarity;
         this.maxHierarchicalResults = maxHierarchicalResults;
+        this.hierarchyHopDepth = Math.max(1, hierarchyHopDepth);
         this.useAiFallback = useAiFallback;
         this.aiEnabled = aiEnabled;
         
@@ -94,10 +97,16 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
         
         // Strategy 3: Hierarchical Search (parent/child/sibling of matched concepts)
         if (!request.matchedSnomedIds().isEmpty()) {
-            List<AiRecommendationResponse.SuggestedTerm> hierarchicalSuggestions = 
-                    findViaHierarchicalSearch(request.matchedSnomedIds(), request.unmatchedTerms());
+            // Widen the candidate pool with a bounded multi-hop hierarchy traversal.
+            // This makes "additional suggestions" less brittle across different term sets.
+            List<AiRecommendationResponse.SuggestedTerm> hierarchicalSuggestions =
+                    findViaWidenedHierarchicalSearch(request.matchedSnomedIds(), hierarchyHopDepth);
             allSuggested.addAll(hierarchicalSuggestions);
         }
+
+        // Deterministic candidate pool for "additional suggestions".
+        // This pool is grounded in your SNOMED hierarchy lookup (not in the AI output).
+        List<AiRecommendationResponse.SuggestedTerm> additionalCandidatePool = new ArrayList<>(allSuggested);
         
         // Strategy 4: AI Agent (fallback for unmatched terms)
         List<String> stillUnmatched = request.unmatchedTerms().stream()
@@ -110,15 +119,23 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
         
         if (!stillUnmatched.isEmpty() && useAiFallback && aiEnabled) {
             System.out.println("DEBUG: Calling AI fallback for terms: " + stillUnmatched);
-            AiRecommendationResponse aiResponse = findViaAiFallback(stillUnmatched, request.matchedSnomedIds(), request.context());
+            AiRecommendationResponse aiResponse = findViaAiFallback(
+                    stillUnmatched,
+                    request.matchedSnomedIds(),
+                    request.context(),
+                    additionalCandidatePool
+            );
             allRecommendations.addAll(aiResponse.recommendations());
-            allSuggested.addAll(aiResponse.suggestedAdditional());
+            // Prefer AI-ranked additions when present; otherwise keep deterministic hierarchy suggestions.
+            if (aiResponse.suggestedAdditional() != null && !aiResponse.suggestedAdditional().isEmpty()) {
+                allSuggested = new ArrayList<>(aiResponse.suggestedAdditional());
+            }
         } else if (!stillUnmatched.isEmpty()) {
             // If AI is disabled, still provide mock recommendations so user sees something
             System.out.println("DEBUG: AI disabled, creating mock recommendations for: " + stillUnmatched);
-            AiRecommendationResponse mockResponse = createMockAiResponse(stillUnmatched, request.matchedSnomedIds());
+            AiRecommendationResponse mockResponse = createGroundedFallbackResponse(stillUnmatched, additionalCandidatePool);
             allRecommendations.addAll(mockResponse.recommendations());
-            allSuggested.addAll(mockResponse.suggestedAdditional());
+            // Do not add mock suggestedAdditional: keep deterministic hierarchy pool only.
         }
         
         // Deduplicate and rank recommendations
@@ -216,55 +233,97 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
         return candidates;
     }
     
+    // Strategy 3: Hierarchical search is now handled by findViaWidenedHierarchicalSearch(...)
+
     /**
-     * Strategy 3: Hierarchical Search - find parent/child/sibling concepts
+     * Widened hierarchical search by bounded multi-hop traversal.
+     *
+     * Hop depth = 1 behaves like the old strategy (parents + children of matched concepts).
+     * Hop depth > 1 additionally includes grandparents/grandchildren, which also covers many sibling-like
+     * concepts (children of parents) without needing explicit sibling traversal.
      */
-    private List<AiRecommendationResponse.SuggestedTerm> findViaHierarchicalSearch(
-            List<String> matchedSnomedIds, List<String> unmatchedTerms) {
-        
+    private List<AiRecommendationResponse.SuggestedTerm> findViaWidenedHierarchicalSearch(
+            List<String> matchedSnomedIds,
+            int hopDepth) {
+
+        if (hopDepth < 1) {
+            return List.of();
+        }
+
+        Set<String> matchedSet = new HashSet<>(matchedSnomedIds);
+
+        // Avoid suggesting the same SNOMED id multiple times.
+        Set<String> suggestedVisited = new HashSet<>();
         List<AiRecommendationResponse.SuggestedTerm> suggestions = new ArrayList<>();
-        Set<String> visited = new HashSet<>();
-        
+
+        record Node(String conceptId, int depth) {}
+
+        // Avoid infinite loops when traversing the graph.
+        Set<String> expandedVisited = new HashSet<>(matchedSnomedIds);
+        Deque<Node> queue = new ArrayDeque<>();
         for (String matchedId : matchedSnomedIds) {
-            // Get parent concepts
-            List<String> parents = getParentConcepts(matchedId);
-            for (String parentId : parents) {
-                if (!visited.contains(parentId) && suggestions.size() < maxHierarchicalResults) {
-                    CandidateRecommendation candidate = fetchConceptDetails(parentId, null);
-                    if (candidate != null) {
-                        suggestions.add(new AiRecommendationResponse.SuggestedTerm(
-                                candidate.snomedId(),
-                                candidate.preferredTerm(),
-                                candidate.fsn(),
-                                "Parent concept of matched term " + matchedId,
-                                "Related concept from SNOMED hierarchy",
-                                List.of("is-a: " + matchedId)
-                        ));
-                        visited.add(parentId);
-                    }
+            queue.add(new Node(matchedId, 0));
+        }
+
+        while (!queue.isEmpty() && suggestions.size() < maxHierarchicalResults) {
+            Node node = queue.removeFirst();
+
+            if (node.depth() >= hopDepth) {
+                continue;
+            }
+
+            // Parents (broader concepts)
+            for (String parentId : getParentConcepts(node.conceptId())) {
+                if (suggestions.size() >= maxHierarchicalResults) break;
+                if (parentId == null || parentId.isBlank()) continue;
+                if (matchedSet.contains(parentId)) continue;
+                if (suggestedVisited.contains(parentId)) continue;
+
+                CandidateRecommendation candidate = fetchConceptDetails(parentId, null);
+                if (candidate == null) continue;
+
+                suggestions.add(new AiRecommendationResponse.SuggestedTerm(
+                        candidate.snomedId(),
+                        candidate.preferredTerm(),
+                        candidate.fsn(),
+                        "Ancestor (hierarchy depth " + (node.depth() + 1) + ") of matched concepts",
+                        "Hierarchy-derived related concept",
+                        List.of("hierarchy:broader")
+                ));
+                suggestedVisited.add(parentId);
+
+                // Expand one more hop beyond the suggested node.
+                if (node.depth() + 1 < hopDepth && expandedVisited.add(parentId)) {
+                    queue.addLast(new Node(parentId, node.depth() + 1));
                 }
             }
-            
-            // Get child concepts
-            List<String> children = getChildConcepts(matchedId);
-            for (String childId : children) {
-                if (!visited.contains(childId) && suggestions.size() < maxHierarchicalResults) {
-                    CandidateRecommendation candidate = fetchConceptDetails(childId, null);
-                    if (candidate != null) {
-                        suggestions.add(new AiRecommendationResponse.SuggestedTerm(
-                                candidate.snomedId(),
-                                candidate.preferredTerm(),
-                                candidate.fsn(),
-                                "Child concept of matched term " + matchedId,
-                                "Related concept from SNOMED hierarchy",
-                                List.of("is-a: " + matchedId)
-                        ));
-                        visited.add(childId);
-                    }
+
+            // Children (narrower concepts)
+            for (String childId : getChildConcepts(node.conceptId())) {
+                if (suggestions.size() >= maxHierarchicalResults) break;
+                if (childId == null || childId.isBlank()) continue;
+                if (matchedSet.contains(childId)) continue;
+                if (suggestedVisited.contains(childId)) continue;
+
+                CandidateRecommendation candidate = fetchConceptDetails(childId, null);
+                if (candidate == null) continue;
+
+                suggestions.add(new AiRecommendationResponse.SuggestedTerm(
+                        candidate.snomedId(),
+                        candidate.preferredTerm(),
+                        candidate.fsn(),
+                        "Descendant (hierarchy depth " + (node.depth() + 1) + ") of matched concepts",
+                        "Hierarchy-derived related concept",
+                        List.of("hierarchy:narrower")
+                ));
+                suggestedVisited.add(childId);
+
+                if (node.depth() + 1 < hopDepth && expandedVisited.add(childId)) {
+                    queue.addLast(new Node(childId, node.depth() + 1));
                 }
             }
         }
-        
+
         return suggestions;
     }
     
@@ -434,12 +493,16 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
     
     private List<AiRecommendationResponse.SuggestedTerm> deduplicateSuggested(
             List<AiRecommendationResponse.SuggestedTerm> suggested) {
-        
-        Map<String, AiRecommendationResponse.SuggestedTerm> unique = new HashMap<>();
+        // Preserve input order for consistent ranking in the UI.
+        // If the same SNOMED id appears multiple times, keep the last occurrence.
+        Map<String, AiRecommendationResponse.SuggestedTerm> unique = new java.util.LinkedHashMap<>();
         for (AiRecommendationResponse.SuggestedTerm term : suggested) {
-            unique.putIfAbsent(term.snomedId(), term);
+            if (term == null || term.snomedId() == null) continue;
+            if (unique.containsKey(term.snomedId())) {
+                unique.remove(term.snomedId());
+            }
+            unique.put(term.snomedId(), term);
         }
-        
         return new ArrayList<>(unique.values());
     }
     
@@ -447,102 +510,222 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
      * Strategy 4: AI Agent Fallback
      */
     private AiRecommendationResponse findViaAiFallback(
-            List<String> unmatchedTerms, List<String> matchedSnomedIds, String context) {
+            List<String> unmatchedTerms,
+            List<String> matchedSnomedIds,
+            String context,
+            List<AiRecommendationResponse.SuggestedTerm> additionalCandidatePool) {
         
         try {
-            String prompt = buildAiPrompt(unmatchedTerms, matchedSnomedIds, context);
+            String prompt = buildAiPrompt(unmatchedTerms, matchedSnomedIds, context, additionalCandidatePool);
             String content = this.chatClient.prompt(prompt).call().content();
             
             try {
                 com.fasterxml.jackson.databind.json.JsonMapper mapper = 
                         com.fasterxml.jackson.databind.json.JsonMapper.builder().build();
-                return mapper.readValue(content, AiRecommendationResponse.class);
+                AiRecommendationResponse parsed = mapper.readValue(content, AiRecommendationResponse.class);
+                return filterAiResponseToGroundedPool(parsed, unmatchedTerms, additionalCandidatePool);
             } catch (Exception e) {
                 System.err.println("Error parsing AI response: " + e.getMessage());
-                return createMockAiResponse(unmatchedTerms, matchedSnomedIds);
+                return createGroundedFallbackResponse(unmatchedTerms, additionalCandidatePool);
             }
         } catch (Exception e) {
             System.err.println("Error calling AI service: " + e.getMessage());
-            return createMockAiResponse(unmatchedTerms, matchedSnomedIds);
+            return createGroundedFallbackResponse(unmatchedTerms, additionalCandidatePool);
         }
     }
     
-    private String buildAiPrompt(List<String> unmatchedTerms, List<String> matchedSnomedIds, String context) {
-        String unmatchedList = unmatchedTerms.stream()
-                .map(t -> "\"" + t + "\"")
-                .collect(Collectors.joining(", "));
-        
-        String matchedList = matchedSnomedIds.stream()
-                .map(id -> "\"" + id + "\"")
-                .collect(Collectors.joining(", "));
-        
-        String ctx = context != null ? context : "Swedish healthcare terminology";
-        
-        return ""
-            + "You are a clinical terminology assistant helping build a code system.\n"
-            + "Given unmatched terms and existing matched SNOMED CT codes, recommend:\n"
-            + "1. SNOMED codes for unmatched terms\n"
-            + "2. Additional complementary SNOMED codes that enhance the code system\n\n"
-            + "Return JSON with this structure:\n"
-            + "{\n"
-            + "  \"recommendations\": [\n"
-            + "    {\n"
-            + "      \"inputTerm\": \"<unmatched term>\",\n"
-            + "      \"recommendedSnomedId\": \"<SNOMED ID>\",\n"
-            + "      \"recommendedTerm\": \"<term name>\",\n"
-            + "      \"fsn\": \"<fully specified name>\",\n"
-            + "      \"confidence\": 0.85,\n"
-            + "      \"reason\": \"<explanation>\",\n"
-            + "      \"definition\": \"<definition>\",\n"
-            + "      \"relations\": [\"is-a: Disorder\", ...]\n"
-            + "    }\n"
-            + "  ],\n"
-            + "  \"suggestedAdditional\": [\n"
-            + "    {\n"
-            + "      \"snomedId\": \"<SNOMED ID>\",\n"
-            + "      \"term\": \"<term name>\",\n"
-            + "      \"fsn\": \"<fully specified name>\",\n"
-            + "      \"reason\": \"<why suggested>\",\n"
-            + "      \"definition\": \"<definition>\",\n"
-            + "      \"relations\": [\"is-a: Disorder\", ...]\n"
-            + "    }\n"
-            + "  ]\n"
-            + "}\n"
-            + "Only output valid JSON.\n"
-            + "Context: " + ctx + "\n"
-            + "Unmatched terms: [" + unmatchedList + "]\n"
-            + "Matched SNOMED IDs: [" + matchedList + "]\n";
+    // (old 3-arg prompt removed; we now use the grounded 4-arg prompt only)
+
+    private String escapeForPrompt(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", " ")
+                .replace("\r", " ");
     }
-    
-    private AiRecommendationResponse createMockAiResponse(List<String> unmatchedTerms, List<String> matchedSnomedIds) {
+
+    /**
+     * Grounded (candidate-pool-only) AI prompt.
+     * The AI must only output SNOMED ids that appear in additionalCandidatePool.
+     */
+    private String buildAiPrompt(
+            List<String> unmatchedTerms,
+            List<String> matchedSnomedIds,
+            String context,
+            List<AiRecommendationResponse.SuggestedTerm> additionalCandidatePool) {
+
+        String unmatchedList = unmatchedTerms.stream()
+                .map(t -> "\"" + escapeForPrompt(t) + "\"")
+                .collect(Collectors.joining(", "));
+
+        String matchedList = matchedSnomedIds.stream()
+                .map(id -> "\"" + escapeForPrompt(id) + "\"")
+                .collect(Collectors.joining(", "));
+
+        String ctx = context != null ? context : "Swedish healthcare terminology";
+
+        int maxCandidatesInPrompt = 30;
+        List<AiRecommendationResponse.SuggestedTerm> pool = additionalCandidatePool == null
+                ? List.of()
+                : additionalCandidatePool.stream().limit(maxCandidatesInPrompt).toList();
+
+        String candidatePoolJson = pool.stream()
+                .map(c -> "{"
+                        + "\"snomedId\":\"" + escapeForPrompt(c.snomedId()) + "\","
+                        + "\"term\":\"" + escapeForPrompt(c.term()) + "\","
+                        + "\"fsn\":\"" + escapeForPrompt(c.fsn()) + "\""
+                        + "}")
+                .collect(Collectors.joining(", "));
+
+        return ""
+                + "You are a clinical terminology assistant helping build a code system.\n"
+                + "You must use a *grounded* candidate pool.\n\n"
+                + "Given unmatched terms and existing matched SNOMED CT codes, do:\n"
+                + "1) For each unmatched term, select the best recommendedSnomedId from the candidate pool.\n"
+                + "2) Select additional complementary SNOMED codes from the same candidate pool.\n\n"
+                + "IMPORTANT HARD CONSTRAINTS:\n"
+                + "- 'recommendations[].recommendedSnomedId' MUST be one of the provided candidate pool snomedId values.\n"
+                + "- 'suggestedAdditional[].snomedId' MUST be one of the provided candidate pool snomedId values.\n"
+                + "- Do NOT invent any SNOMED id outside the candidate pool.\n"
+                + "- Return JSON only.\n\n"
+                + "Candidate pool (grounded): [" + candidatePoolJson + "]\n\n"
+                + "Return JSON with this structure:\n"
+                + "{\n"
+                + "  \"recommendations\": [\n"
+                + "    {\n"
+                + "      \"inputTerm\": \"<unmatched term>\",\n"
+                + "      \"recommendedSnomedId\": \"<SNOMED ID>\",\n"
+                + "      \"recommendedTerm\": \"<term name>\",\n"
+                + "      \"fsn\": \"<fully specified name>\",\n"
+                + "      \"confidence\": 0.0,\n"
+                + "      \"reason\": \"<explanation>\",\n"
+                + "      \"definition\": \"<definition>\",\n"
+                + "      \"relations\": [\"<relation>\", ...]\n"
+                + "    }\n"
+                + "  ],\n"
+                + "  \"suggestedAdditional\": [\n"
+                + "    {\n"
+                + "      \"snomedId\": \"<SNOMED ID>\",\n"
+                + "      \"term\": \"<term name>\",\n"
+                + "      \"fsn\": \"<fully specified name>\",\n"
+                + "      \"reason\": \"<why suggested>\",\n"
+                + "      \"definition\": \"<definition>\",\n"
+                + "      \"relations\": [\"<relation>\", ...]\n"
+                + "    }\n"
+                + "  ]\n"
+                + "}\n"
+                + "Only output valid JSON.\n"
+                + "Context: " + ctx + "\n"
+                + "Unmatched terms: [" + unmatchedList + "]\n"
+                + "Matched SNOMED IDs: [" + matchedList + "]\n";
+    }
+
+    private AiRecommendationResponse createGroundedFallbackResponse(
+            List<String> unmatchedTerms,
+            List<AiRecommendationResponse.SuggestedTerm> additionalCandidatePool) {
+
+        if (unmatchedTerms == null || unmatchedTerms.isEmpty()) {
+            return new AiRecommendationResponse(List.of(), List.of());
+        }
+        if (additionalCandidatePool == null || additionalCandidatePool.isEmpty()) {
+            // Nothing grounded we can select from
+            return new AiRecommendationResponse(List.of(), List.of());
+        }
+
+        AiRecommendationResponse.SuggestedTerm fallback = additionalCandidatePool.get(0);
         List<AiRecommendationResponse.Recommendation> recommendations = new ArrayList<>();
+
         for (String term : unmatchedTerms) {
             recommendations.add(new AiRecommendationResponse.Recommendation(
-                term,
-                "MOCK_" + term.hashCode(),
-                "Mock recommended term for " + term,
-                "Mock term (disorder)",
-                0.75,
-                "Mock recommendation based on context",
-                "Mock definition",
-                List.of("is-a: Disorder")
+                    term,
+                    fallback.snomedId(),
+                    fallback.term(),
+                    fallback.fsn(),
+                    0.1,
+                    "Fallback to grounded candidate pool",
+                    fallback.definition(),
+                    fallback.relations()
             ));
         }
-        
-        List<AiRecommendationResponse.SuggestedTerm> suggested = new ArrayList<>();
-        if (!matchedSnomedIds.isEmpty()) {
-            suggested.add(new AiRecommendationResponse.SuggestedTerm(
-                "MOCK_COMPLEMENTARY",
-                "Complementary concept",
-                "Complementary concept (disorder)",
-                "Complements matched terms",
-                "Mock definition",
-                List.of("is-a: Disorder")
-            ));
-        }
-        
-        return new AiRecommendationResponse(recommendations, suggested);
+
+        // Grounded behavior: do not override deterministic additions with mock entries.
+        return new AiRecommendationResponse(recommendations, List.of());
     }
+
+    private AiRecommendationResponse filterAiResponseToGroundedPool(
+            AiRecommendationResponse parsed,
+            List<String> unmatchedTerms,
+            List<AiRecommendationResponse.SuggestedTerm> additionalCandidatePool) {
+
+        if (parsed == null) {
+            return createGroundedFallbackResponse(unmatchedTerms, additionalCandidatePool);
+        }
+
+        Set<String> allowedAdditionalIds = additionalCandidatePool == null
+                ? Set.of()
+                : additionalCandidatePool.stream()
+                        .filter(c -> c != null && c.snomedId() != null)
+                        .map(AiRecommendationResponse.SuggestedTerm::snomedId)
+                        .collect(Collectors.toSet());
+
+        Map<String, AiRecommendationResponse.SuggestedTerm> candidateById = additionalCandidatePool == null
+                ? Map.of()
+                : additionalCandidatePool.stream()
+                        .filter(c -> c != null && c.snomedId() != null)
+                        .collect(Collectors.toMap(AiRecommendationResponse.SuggestedTerm::snomedId, c -> c, (a, b) -> a));
+
+        // Hard filter suggestedAdditional to the grounded pool; also normalize term/fsn fields from the pool.
+        List<AiRecommendationResponse.SuggestedTerm> filteredSuggested = parsed.suggestedAdditional() == null
+                ? List.of()
+                : parsed.suggestedAdditional().stream()
+                        .filter(s -> s != null && s.snomedId() != null && allowedAdditionalIds.contains(s.snomedId()))
+                        .map(s -> {
+                            AiRecommendationResponse.SuggestedTerm c = candidateById.get(s.snomedId());
+                            if (c == null) return null;
+                            String reason = s.reason() != null ? s.reason() : c.reason();
+                            return new AiRecommendationResponse.SuggestedTerm(
+                                    c.snomedId(),
+                                    c.term(),
+                                    c.fsn(),
+                                    reason,
+                                    c.definition(),
+                                    c.relations()
+                            );
+                        })
+                        .filter(Objects::nonNull)
+                        .toList();
+
+        // Hard filter recommendations to the same grounded pool to eliminate invented ids.
+        List<AiRecommendationResponse.Recommendation> filteredRecs = parsed.recommendations() == null
+                ? List.of()
+                : parsed.recommendations().stream()
+                        .filter(r -> r != null && r.recommendedSnomedId() != null && allowedAdditionalIds.contains(r.recommendedSnomedId()))
+                        .map(r -> {
+                            AiRecommendationResponse.SuggestedTerm c = candidateById.get(r.recommendedSnomedId());
+                            if (c == null) return null;
+                            String reason = r.reason() != null ? r.reason() : "Grounded candidate match";
+                            return new AiRecommendationResponse.Recommendation(
+                                    r.inputTerm(),
+                                    c.snomedId(),
+                                    c.term(),
+                                    c.fsn(),
+                                    r.confidence(),
+                                    reason,
+                                    c.definition(),
+                                    c.relations()
+                            );
+                        })
+                        .filter(Objects::nonNull)
+                        .toList();
+
+        if (filteredRecs.isEmpty() && unmatchedTerms != null && !unmatchedTerms.isEmpty()) {
+            return createGroundedFallbackResponse(unmatchedTerms, additionalCandidatePool);
+        }
+
+        return new AiRecommendationResponse(filteredRecs, filteredSuggested);
+    }
+    
+    // (old mocked AI response removed; we now use grounded fallback only)
     
     /**
      * Internal data structure for candidate recommendations

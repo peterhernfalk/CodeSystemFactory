@@ -2,6 +2,8 @@
 
 This document outlines free AI API alternatives that can be used for AI recommendations in the Code System Factory application. The application currently uses OpenAI (GPT-4o-mini) via Spring AI framework.
 
+**Quick reference:** For a short list of **free working AI agents** with URLs, strengths/weaknesses, and comparison for the *“Get AI Recommendations for Additional Suggestions”* button, see [FREE_AI_AGENTS_FOR_RECOMMENDATIONS.md](./FREE_AI_AGENTS_FOR_RECOMMENDATIONS.md).
+
 ## Current Setup
 
 - **Framework**: Spring AI 1.0.0-M3

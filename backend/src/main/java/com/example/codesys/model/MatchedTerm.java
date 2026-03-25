@@ -6,6 +6,7 @@ public record MatchedTerm(
     String preferredTerm,
     String fsn,
     double similarity,
-    String description
+    String description,
+    String matchedByServer
 ) {}
 

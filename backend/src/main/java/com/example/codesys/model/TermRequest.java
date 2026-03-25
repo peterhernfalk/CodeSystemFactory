@@ -11,5 +11,6 @@ import java.util.List;
  */
 public record TermRequest(
     @NotEmpty List<String> terms,
-    String server  // Optional: "snowstorm" or "ontoserver", defaults to "snowstorm"
+    String server, // Optional: "snowstorm" | "ontoserver" | "inera" ; defaults to "snowstorm"
+    List<String> serverChain // Optional ordered fallback chain, e.g. ["snowstorm","ontoserver","inera"]
 ) {}

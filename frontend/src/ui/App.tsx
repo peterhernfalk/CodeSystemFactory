@@ -13,6 +13,7 @@ interface MatchedTerm {
   fsn: string
   similarity: number
   description: string | null
+  matchedByServer: string
 }
 
 interface UnmatchedTerm {
@@ -65,7 +66,7 @@ export default function App(){
   })
   const [showMetadataForm, setShowMetadataForm] = useState(false)
   const [backendVersion, setBackendVersion] = useState<string | null>(null)
-  const [selectedServer, setSelectedServer] = useState<'snowstorm' | 'ontoserver' | 'inera'>('snowstorm')
+  const [selectedServer, setSelectedServer] = useState<'snowstorm' | 'ontoserver' | 'inera' | 'fallback_chain'>('fallback_chain')
 
   // Fetch backend version on mount
   useEffect(() => {
@@ -83,10 +84,11 @@ export default function App(){
 
     const res = await fetch(`${API_BASE_URL}/terms/match`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ 
-        terms,
-        server: selectedServer  // Include server selection
-      })
+      body: JSON.stringify(
+        selectedServer === 'fallback_chain'
+          ? { terms, serverChain: ['snowstorm', 'ontoserver', 'inera'] }
+          : { terms, server: selectedServer }
+      )
     })
     const data = await res.json()
     setMatchedTerms(data.matched || [])
@@ -199,7 +201,7 @@ export default function App(){
             <strong>SNOMED CT Server:</strong>
             <select 
               value={selectedServer} 
-              onChange={e => setSelectedServer(e.target.value as 'snowstorm' | 'ontoserver' | 'inera')}
+              onChange={e => setSelectedServer(e.target.value as 'snowstorm' | 'ontoserver' | 'inera' | 'fallback_chain')}
               style={{
                 padding: '6px 12px', 
                 fontSize: '0.95em', 
@@ -209,6 +211,7 @@ export default function App(){
                 cursor: 'pointer'
               }}
             >
+              <option value="fallback_chain">Fallback: Snowstorm → Ontoserver → Inera</option>
               <option value="snowstorm">Snowstorm (Default)</option>
               <option value="ontoserver">Ontoserver (FHIR)</option>
               <option value="inera">Inera Terminologitjänsten (Swedish)</option>

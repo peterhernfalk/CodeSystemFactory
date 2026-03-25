@@ -1,0 +1,5 @@
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Tue Jan 02 10:10:43 CET 2024
+@default-spring-releases-https\://repo.spring.io/libs-release/.lastUpdated=1704186640156
+https\://repo.maven.apache.org/maven2/.lastUpdated=1704186643271
+https\://repo.spring.io/libs-release/.error=Could not transfer artifact org.mockito\:mockito-junit-jupiter\:jar\:3.6.28 from/to spring-releases (https\://repo.spring.io/libs-release)\: status code\: 401, reason phrase\:  (401)
