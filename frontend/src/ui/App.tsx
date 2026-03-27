@@ -41,6 +41,8 @@ interface SuggestedTerm {
   relations: string[]
 }
 
+type RecommendationMode = 'UNMATCHED' | 'ADDITIONAL' | 'BOTH'
+
 interface CodeSystemMetadata {
   name: string
   version: string
@@ -113,14 +115,16 @@ export default function App(){
     }
   }
 
-  const callAiRecommend = async () => {
+  const callAiRecommend = async (mode: RecommendationMode) => {
     // Allow AI recommendations even if all terms are matched (for additional suggestions)
-    if(matchedTerms.length === 0) {
+    if (matchedTerms.length === 0) {
       setAiError('Match at least one term before requesting AI recommendations.')
       return
     }
     
-    const unmatchedTermList = unmatchedTerms.map(u => u.inputTerm)
+    const unmatchedTermList = mode === 'ADDITIONAL'
+      ? []
+      : unmatchedTerms.map(u => u.inputTerm)
     const matchedSnomedIds = matchedTerms.map(m => m.snomedId)
 
     setAiError(null)
@@ -132,7 +136,8 @@ export default function App(){
         body: JSON.stringify({ 
           unmatchedTerms: unmatchedTermList,
           matchedSnomedIds: matchedSnomedIds,
-          context: 'Swedish healthcare terminology'
+          context: 'Swedish healthcare terminology',
+          recommendationMode: mode
         })
       })
 
@@ -156,7 +161,11 @@ export default function App(){
       setSuggestedAdditional(nextSuggestedAdditional)
 
       if (nextRecommendations.length === 0 && nextSuggestedAdditional.length === 0) {
-        setAiError('No additional suggestions were found for the current matched terms.')
+        setAiError(
+          mode === 'UNMATCHED'
+            ? 'No recommendations were found for unmatched terms.'
+            : 'No additional suggestions were found for the current matched terms.'
+        )
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch AI recommendations.'
@@ -166,6 +175,14 @@ export default function App(){
     } finally {
       setIsAiLoading(false)
     }
+  }
+
+  const callAiRecommendForUnmatched = async () => {
+    await callAiRecommend('UNMATCHED')
+  }
+
+  const callAiRecommendForAdditional = async () => {
+    await callAiRecommend('ADDITIONAL')
   }
 
   const buildCodeSystem = async () => {
@@ -334,7 +351,7 @@ export default function App(){
             unmatched={unmatchedTerms}
             onMatchedChange={setMatchedTerms}
             onUnmatchedChange={setUnmatchedTerms}
-            onRecommend={callAiRecommend}
+            onRecommend={callAiRecommendForUnmatched}
             recommendLoading={isAiLoading}
           />
 
@@ -359,7 +376,7 @@ export default function App(){
               </p>
               <div style={{display: 'flex', gap: 8}}>
                 <button
-                  onClick={callAiRecommend}
+                  onClick={callAiRecommendForAdditional}
                   disabled={isAiLoading}
                   style={{
                     padding: '10px 20px',
@@ -373,8 +390,6 @@ export default function App(){
                 >
                   {isAiLoading
                     ? 'Getting AI Recommendations...'
-                    : unmatchedTerms.length > 0 
-                    ? 'Get AI Recommendations for Unmatched Terms'
                     : 'Get AI Recommendations for Additional Suggestions'}
                 </button>
                 <button

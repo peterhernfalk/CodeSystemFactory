@@ -84,19 +84,27 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
     
     @Override
     public AiRecommendationResponse recommend(AiRecommendationRequest request) {
+        AiRecommendationRequest.RecommendationMode mode = normalizeMode(request.recommendationMode());
+        boolean runUnmatchedRecommendations = mode != AiRecommendationRequest.RecommendationMode.ADDITIONAL;
+        boolean runAdditionalSuggestions = mode != AiRecommendationRequest.RecommendationMode.UNMATCHED;
+
         List<AiRecommendationResponse.Recommendation> allRecommendations = new ArrayList<>();
         List<AiRecommendationResponse.SuggestedTerm> allSuggested = new ArrayList<>();
         
         // Strategy 1: Synonym Database Lookup
-        Map<String, CandidateRecommendation> synonymCandidates = findViaSynonymDatabase(request.unmatchedTerms());
+        Map<String, CandidateRecommendation> synonymCandidates = runUnmatchedRecommendations
+                ? findViaSynonymDatabase(request.unmatchedTerms())
+                : Map.of();
         allRecommendations.addAll(convertToRecommendations(synonymCandidates, "Synonym database match"));
         
         // Strategy 2: Enhanced Fuzzy Matching (candidates with 0.4-0.6 similarity)
-        Map<String, CandidateRecommendation> fuzzyCandidates = findViaFuzzyMatching(request.unmatchedTerms());
+        Map<String, CandidateRecommendation> fuzzyCandidates = runUnmatchedRecommendations
+                ? findViaFuzzyMatching(request.unmatchedTerms())
+                : Map.of();
         allRecommendations.addAll(convertToRecommendations(fuzzyCandidates, "Fuzzy match (similarity 0.4-0.6)"));
         
         // Strategy 3: Hierarchical Search (parent/child/sibling of matched concepts)
-        if (!request.matchedSnomedIds().isEmpty()) {
+        if (runAdditionalSuggestions && !request.matchedSnomedIds().isEmpty()) {
             // Widen the candidate pool with a bounded multi-hop hierarchy traversal.
             // This makes "additional suggestions" less brittle across different term sets.
             List<AiRecommendationResponse.SuggestedTerm> hierarchicalSuggestions =
@@ -108,17 +116,21 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
         // This pool is grounded in your SNOMED hierarchy lookup (not in the AI output).
         List<AiRecommendationResponse.SuggestedTerm> additionalCandidatePool = new ArrayList<>(allSuggested);
         
-        // Strategy 4: AI Agent (fallback for unmatched terms)
+        // Strategy 4: AI Agent (fallback for unmatched terms + ranking of additional suggestions)
         List<String> stillUnmatched = request.unmatchedTerms().stream()
                 .filter(term -> !synonymCandidates.containsKey(term.toLowerCase()) 
                              && !fuzzyCandidates.containsKey(term.toLowerCase()))
                 .collect(Collectors.toList());
+        if (!runUnmatchedRecommendations) {
+            stillUnmatched = List.of();
+        }
         
         System.out.println("DEBUG: Hybrid recommendation - stillUnmatched: " + stillUnmatched);
         System.out.println("DEBUG: Hybrid recommendation - useAiFallback: " + useAiFallback + ", aiEnabled: " + aiEnabled);
         
-        if (!stillUnmatched.isEmpty() && useAiFallback && aiEnabled) {
-            System.out.println("DEBUG: Calling AI fallback for terms: " + stillUnmatched);
+        if (shouldInvokeAiFallback(stillUnmatched, additionalCandidatePool)) {
+            System.out.println("DEBUG: Calling AI fallback. stillUnmatched=" + stillUnmatched
+                    + ", candidatePoolSize=" + additionalCandidatePool.size());
             AiRecommendationResponse aiResponse = findViaAiFallback(
                     stillUnmatched,
                     request.matchedSnomedIds(),
@@ -143,6 +155,26 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
         List<AiRecommendationResponse.SuggestedTerm> deduplicatedSuggested = deduplicateSuggested(allSuggested);
         
         return new AiRecommendationResponse(deduplicatedRecs, deduplicatedSuggested);
+    }
+
+    AiRecommendationRequest.RecommendationMode normalizeMode(AiRecommendationRequest.RecommendationMode mode) {
+        return mode == null ? AiRecommendationRequest.RecommendationMode.BOTH : mode;
+    }
+
+    /**
+     * Option A behavior:
+     * - invoke AI for unresolved unmatched terms
+     * - also invoke AI for additional-suggestion ranking when matched-term candidate pool exists
+     */
+    boolean shouldInvokeAiFallback(
+            List<String> stillUnmatched,
+            List<AiRecommendationResponse.SuggestedTerm> additionalCandidatePool) {
+        if (!useAiFallback || !aiEnabled) {
+            return false;
+        }
+        boolean hasUnmatched = stillUnmatched != null && !stillUnmatched.isEmpty();
+        boolean hasAdditionalPool = additionalCandidatePool != null && !additionalCandidatePool.isEmpty();
+        return hasUnmatched || hasAdditionalPool;
     }
     
     /**

@@ -11,6 +11,14 @@ public record AiRecommendationRequest(
     @NotEmpty(message = "Matched SNOMED IDs list cannot be empty")
     List<String> matchedSnomedIds,
     
-    String context
-) {}
+    String context,
+
+    RecommendationMode recommendationMode
+) {
+    public enum RecommendationMode {
+        UNMATCHED,
+        ADDITIONAL,
+        BOTH
+    }
+}
 
