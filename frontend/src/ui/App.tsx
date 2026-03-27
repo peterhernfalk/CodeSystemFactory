@@ -67,6 +67,9 @@ export default function App(){
   const [showMetadataForm, setShowMetadataForm] = useState(false)
   const [backendVersion, setBackendVersion] = useState<string | null>(null)
   const [selectedServer, setSelectedServer] = useState<'snowstorm' | 'ontoserver' | 'inera' | 'fallback_chain'>('fallback_chain')
+  const [isMatchLoading, setIsMatchLoading] = useState(false)
+  const [isAiLoading, setIsAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   // Fetch backend version on mount
   useEffect(() => {
@@ -81,38 +84,88 @@ export default function App(){
     setUnmatchedTerms([])
     setRecommendations([])
     setSuggestedAdditional([])
+    setAiError(null)
+    setIsMatchLoading(true)
 
-    const res = await fetch(`${API_BASE_URL}/terms/match`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(
-        selectedServer === 'fallback_chain'
-          ? { terms, serverChain: ['snowstorm', 'ontoserver', 'inera'] }
-          : { terms, server: selectedServer }
-      )
-    })
-    const data = await res.json()
-    setMatchedTerms(data.matched || [])
-    setUnmatchedTerms(data.unmatched || [])
+    try {
+      const res = await fetch(`${API_BASE_URL}/terms/match`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(
+          selectedServer === 'fallback_chain'
+            ? { terms, serverChain: ['snowstorm', 'ontoserver', 'inera'] }
+            : { terms, server: selectedServer }
+        )
+      })
+
+      if (!res.ok) {
+        throw new Error(`Term matching request failed (${res.status})`)
+      }
+
+      const data = await res.json()
+      setMatchedTerms(data.matched || [])
+      setUnmatchedTerms(data.unmatched || [])
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : 'Failed to match terms.')
+      setMatchedTerms([])
+      setUnmatchedTerms([])
+    } finally {
+      setIsMatchLoading(false)
+    }
   }
 
   const callAiRecommend = async () => {
     // Allow AI recommendations even if all terms are matched (for additional suggestions)
-    if(matchedTerms.length === 0) return
+    if(matchedTerms.length === 0) {
+      setAiError('Match at least one term before requesting AI recommendations.')
+      return
+    }
     
     const unmatchedTermList = unmatchedTerms.map(u => u.inputTerm)
     const matchedSnomedIds = matchedTerms.map(m => m.snomedId)
-    
-    const res = await fetch(`${API_BASE_URL}/ai/recommend`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ 
-        unmatchedTerms: unmatchedTermList,
-        matchedSnomedIds: matchedSnomedIds,
-        context: 'Swedish healthcare terminology'
+
+    setAiError(null)
+    setIsAiLoading(true)
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/ai/recommend`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ 
+          unmatchedTerms: unmatchedTermList,
+          matchedSnomedIds: matchedSnomedIds,
+          context: 'Swedish healthcare terminology'
+        })
       })
-    })
-    const data = await res.json()
-    setRecommendations(data.recommendations || [])
-    setSuggestedAdditional(data.suggestedAdditional || [])
+
+      if (!res.ok) {
+        let message = `AI recommendation request failed (${res.status})`
+        try {
+          const errorText = await res.text()
+          if (errorText) {
+            message = `${message}: ${errorText}`
+          }
+        } catch {
+          // Keep the default message if error payload cannot be read.
+        }
+        throw new Error(message)
+      }
+
+      const data = await res.json()
+      const nextRecommendations = data.recommendations || []
+      const nextSuggestedAdditional = data.suggestedAdditional || []
+      setRecommendations(nextRecommendations)
+      setSuggestedAdditional(nextSuggestedAdditional)
+
+      if (nextRecommendations.length === 0 && nextSuggestedAdditional.length === 0) {
+        setAiError('No additional suggestions were found for the current matched terms.')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch AI recommendations.'
+      setAiError(message)
+      setRecommendations([])
+      setSuggestedAdditional([])
+    } finally {
+      setIsAiLoading(false)
+    }
   }
 
   const buildCodeSystem = async () => {
@@ -183,8 +236,46 @@ export default function App(){
     document.body.removeChild(a)
   }
 
+  const isLoading = isMatchLoading || isAiLoading
+
   return (
     <div style={{maxWidth: 1200, margin: '2rem auto', fontFamily: 'system-ui, sans-serif', padding: '0 1rem'}}>
+      {isLoading && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(255, 255, 255, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000
+          }}
+        >
+          <div style={{textAlign: 'center'}}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                border: '6px solid #d9e2ef',
+                borderTop: '6px solid #007bff',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+                margin: '0 auto'
+              }}
+            />
+            <p style={{marginTop: 12, fontWeight: 600, color: '#1f2937'}}>
+              {isMatchLoading ? 'Matching terms...' : 'Getting AI recommendations...'}
+            </p>
+          </div>
+        </div>
+      )}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
       <h1>SNOMED Code System Builder</h1>
       <p>Enter terms, match with SNOMED CT, get AI recommendations, and export your code system.</p>
       
@@ -219,18 +310,19 @@ export default function App(){
           </label>
           <button 
             onClick={callMatch} 
+            disabled={isLoading}
             style={{
               padding: '8px 16px',
-              backgroundColor: '#007bff',
+              backgroundColor: isLoading ? '#6c757d' : '#007bff',
               color: 'white',
               border: 'none',
               borderRadius: 4,
-              cursor: 'pointer',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
               fontSize: '1em',
               fontWeight: 'bold'
             }}
           >
-            Match Terms
+            {isMatchLoading ? 'Matching Terms...' : 'Match Terms'}
           </button>
         </div>
       </div>
@@ -243,7 +335,14 @@ export default function App(){
             onMatchedChange={setMatchedTerms}
             onUnmatchedChange={setUnmatchedTerms}
             onRecommend={callAiRecommend}
+            recommendLoading={isAiLoading}
           />
+
+          {aiError && (
+            <div style={{marginTop: 12, padding: 12, borderRadius: 6, backgroundColor: '#fff3cd', color: '#856404', border: '1px solid #ffeeba'}}>
+              {aiError}
+            </div>
+          )}
           
           {/* Show build button if we have matched terms, even without recommendations */}
           {matchedTerms.length > 0 && (recommendations.length === 0 && suggestedAdditional.length === 0) && !showMetadataForm && (
@@ -261,17 +360,20 @@ export default function App(){
               <div style={{display: 'flex', gap: 8}}>
                 <button
                   onClick={callAiRecommend}
+                  disabled={isAiLoading}
                   style={{
                     padding: '10px 20px',
-                    backgroundColor: '#007bff',
+                    backgroundColor: isAiLoading ? '#6c757d' : '#007bff',
                     color: 'white',
                     border: 'none',
                     borderRadius: 4,
-                    cursor: 'pointer',
+                    cursor: isAiLoading ? 'not-allowed' : 'pointer',
                     fontSize: '1em'
                   }}
                 >
-                  {unmatchedTerms.length > 0 
+                  {isAiLoading
+                    ? 'Getting AI Recommendations...'
+                    : unmatchedTerms.length > 0 
                     ? 'Get AI Recommendations for Unmatched Terms'
                     : 'Get AI Recommendations for Additional Suggestions'}
                 </button>

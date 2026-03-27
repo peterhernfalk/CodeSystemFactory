@@ -22,9 +22,17 @@ interface Props {
   onMatchedChange: (matched: MatchedTerm[]) => void
   onUnmatchedChange: (unmatched: UnmatchedTerm[]) => void
   onRecommend: () => void
+  recommendLoading?: boolean
 }
 
-export function MatchResults({matched, unmatched, onMatchedChange, onUnmatchedChange, onRecommend}: Props){
+export function MatchResults({
+  matched,
+  unmatched,
+  onMatchedChange,
+  onUnmatchedChange,
+  onRecommend,
+  recommendLoading = false
+}: Props){
   const [editingMatched, setEditingMatched] = useState<number | null>(null)
   const [editingUnmatched, setEditingUnmatched] = useState<number | null>(null)
 
@@ -157,9 +165,18 @@ export function MatchResults({matched, unmatched, onMatchedChange, onUnmatchedCh
           </table>
           <button 
             onClick={onRecommend} 
-            style={{marginTop:12, padding: '8px 16px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer'}}
+            disabled={recommendLoading}
+            style={{
+              marginTop:12,
+              padding: '8px 16px',
+              backgroundColor: recommendLoading ? '#6c757d' : '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: 4,
+              cursor: recommendLoading ? 'not-allowed' : 'pointer'
+            }}
           >
-            Get AI Recommendations for Unmatched Terms
+            {recommendLoading ? 'Getting AI Recommendations...' : 'Get AI Recommendations for Unmatched Terms'}
           </button>
         </div>
       )}
