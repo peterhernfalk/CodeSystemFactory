@@ -24,8 +24,14 @@ if (!content.includes('preferredDarwinBase')) {
     `const rollupDir = path.join(__dirname, '..', '..', '@rollup');
 let preferredDarwinBase;
 if (platform === 'darwin') {
-  if (existsSync(path.join(rollupDir, 'rollup-darwin-arm64'))) preferredDarwinBase = 'darwin-arm64';
-  else if (existsSync(path.join(rollupDir, 'rollup-darwin-x64'))) preferredDarwinBase = 'darwin-x64';
+  const archPreferred = process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
+  if (existsSync(path.join(rollupDir, 'rollup-' + archPreferred))) {
+    preferredDarwinBase = archPreferred;
+  } else if (existsSync(path.join(rollupDir, 'rollup-darwin-arm64'))) {
+    preferredDarwinBase = 'darwin-arm64';
+  } else if (existsSync(path.join(rollupDir, 'rollup-darwin-x64'))) {
+    preferredDarwinBase = 'darwin-x64';
+  }
 }
 const msvcLinkFilenameByArch = {`
   );
@@ -46,7 +52,22 @@ const msvcLinkFilenameByArch = {`
   }
 }
 
-// Fix 2: Add fallback in requireWithFriendlyError - try the other darwin package if the requested one is missing
+// Fix 1b: upgrade an already-patched preferredDarwinBase block to respect process.arch
+content = content.replace(
+  /if \(platform === 'darwin'\) \{\s*if \(existsSync\(path\.join\(rollupDir, 'rollup-darwin-arm64'\)\)\) preferredDarwinBase = 'darwin-arm64';\s*else if \(existsSync\(path\.join\(rollupDir, 'rollup-darwin-x64'\)\)\) preferredDarwinBase = 'darwin-x64';\s*\}/,
+  `if (platform === 'darwin') {
+  const archPreferred = process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
+  if (existsSync(path.join(rollupDir, 'rollup-' + archPreferred))) {
+    preferredDarwinBase = archPreferred;
+  } else if (existsSync(path.join(rollupDir, 'rollup-darwin-arm64'))) {
+    preferredDarwinBase = 'darwin-arm64';
+  } else if (existsSync(path.join(rollupDir, 'rollup-darwin-x64'))) {
+    preferredDarwinBase = 'darwin-x64';
+  }
+}`
+);
+
+// Fix 2: Add fallback in requireWithFriendlyError
 if (!content.includes('// Workaround: try other darwin native package')) {
   const requirePattern = /(const requireWithFriendlyError = id => \{[^]*?try \{[^]*?return require\(id\);[\s\S]*?\} catch \(error\) \{)/;
   const fallbackCode = `$1
@@ -78,10 +99,8 @@ if (!content.includes("if (platform === 'darwin' && (arch === 'arm64'")) {
 
 fs.writeFileSync(nativeFile, content);
 
-// On Apple Silicon (darwin arm64), npm often only installs rollup-darwin-arm64.
-// If Node is running under Rosetta (x64), rollup will ask for darwin-x64 and fail.
-// The native.js patch below forces darwin-arm64 when process.arch is arm64, and
-// has a fallback to try the other package if one is missing. To avoid errors when
-// using Rosetta, run Node natively: arch -arm64 npm run dev
-console.log('✅ Successfully patched rollup native.js for arm64');
+// On Apple Silicon, npm often installs only one @rollup/rollup-darwin-* optional package.
+// Node must match that architecture: use native arm64 Node (arch -arm64 npm run dev)
+// or install the x64 package when running Node under Rosetta.
+console.log('✅ Patched rollup native.js (darwin arch:', process.arch + ')');
 

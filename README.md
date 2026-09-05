@@ -1,78 +1,120 @@
 # Code System Factory
 
-A stateless web application for building medical code systems by matching domain terms with SNOMED CT (Swedish) and generating AI-assisted recommendations.
+A stateless web application for building medical code systems by matching domain terms with SNOMED CT and generating AI-assisted modeling suggestions (including SNOMED CT Editorial Guide–style proposals for unmatched terms).
+
+**Versions:** backend `0.2.1-SNAPSHOT` · frontend `0.2.1`
 
 ## Overview
 
 Code System Factory helps healthcare organizations create structured code systems by:
-- **Matching terms** with SNOMED CT concepts using similarity algorithms
-- **Providing AI recommendations** for unmatched terms using hybrid strategies
-- **Building and exporting** code systems in multiple formats (FHIR JSON, CSV, Excel)
+
+- **Matching terms** with SNOMED CT via selectable terminology servers (Ontoserver by default)
+- **Modeling unmatched terms** with Editorial Guide–oriented AI suggestions (existing concepts, postcoordination, or new local terms)
+- **Suggesting new-term modeling** for matched terms and merging those results with unmatched modeling
+- **Building and exporting** code systems (FHIR JSON, CSV, Excel) that include matched terms plus all remaining AI proposals
 - **Supporting Swedish language** terminology with English fallback
+
+
+
+## Typical workflow
+
+1. Enter terms and press **Match Terms**
+2. Press **Model unmatched terms (SNOMED Editorial Guide)** for unmatched rows
+3. Press **Find New-Term Modeling Suggestions** for matched terms (results **merge** with step 2)
+4. Review / remove unwanted proposals, then press **Build Code System** (includes matched terms **and all listed AI proposals**)
+5. Export as FHIR / CSV / Excel
+
+
 
 ## Features
 
-### ✅ Core Functionality
 
-- **Term Matching**: Match domain terms with SNOMED CT concepts using Jaro-Winkler similarity
-- **Hybrid Recommendations**: Multi-strategy recommendation system:
-  - Synonym database lookup (curated Swedish→SNOMED mappings)
-  - Fuzzy matching (similarity 0.4-0.6)
-  - Hierarchical search (parent/child concepts)
-  - AI fallback (OpenAI/LLM)
-- **Code System Building**: Combine matched and recommended terms into structured code systems
-- **Multi-format Export**: Export code systems as FHIR JSON, CSV, or Excel
-- **Swedish Language Support**: Primary language Swedish with English fallback
-- **Swagger UI**: Interactive API documentation at `/swagger-ui.html`
 
-### ✅ Technical Features
+### Core functionality
 
-- **Stateless Architecture**: No database dependencies - all state managed in frontend
-- **RESTful API**: Clean REST endpoints with JSON request/response
-- **CORS Enabled**: Configured for browser access
-- **Version Management**: Automatic version tracking from Maven/package.json
-- **Development Mode**: Mock AI responses when AI is disabled
+- **Term matching**: Jaro-Winkler similarity against SNOMED CT (threshold 0.75 for direct matches)
+- **Multi-server matching**: Ontoserver (default), Snowstorm, Inera Terminologitjänsten, or fallback chain
+- **Hybrid recommendations / modeling**:
+  - Synonym database (curated Swedish→SNOMED mappings)
+  - Fuzzy rematch and FHIR `ValueSet/$expand` candidate seeding
+  - Hierarchical neighbours of matched concepts (FHIR `$lookup` on Ontoserver by default)
+  - AI **MODELING** mode with Editorial Guide proximal-primitive rules (per-term contract)
+- **Code system building**: Matched terms + existing SNOMED additions + candidate new terms (`LOCAL-`*) + any other listed proposals
+- **Multi-format export**: FHIR JSON, CSV, Excel
+- **Swedish language support**: Primary `sv` with English fallback
+- **Swagger UI**: Interactive API docs at `/swagger-ui.html`
+
+
+
+### Technical features
+
+- **Stateless architecture**: No database — state lives in the frontend session
+- **RESTful API**: JSON request/response
+- **CORS enabled** for browser access
+- **Version management**: From Maven `pom.xml` / npm `package.json` (`/api/version`)
+- **Provider switch**: Gemini / Ollama / other OpenAI-compatible endpoints via env vars
+
+
 
 ## Technology Stack
 
+
+
 ### Backend
-- **Framework**: Spring Boot 3.3.2
-- **Language**: Java 17
+
+- **Framework**: Spring Boot 3.5.16
+- **Language**: Java 21
 - **Build Tool**: Maven
-- **AI Integration**: Spring AI 1.0.0-M3 (OpenAI support)
-- **API Documentation**: SpringDoc OpenAPI 2.6.0
-- **SNOMED Integration**: Snowstorm FHIR API
+- **AI Integration**: Spring AI 1.1.5 (OpenAI-compatible client)
+- **API Documentation**: SpringDoc OpenAPI 2.8.15
+- **SNOMED / FHIR**: Ontoserver (default), Snowstorm FHIR/REST, Inera (often requires auth)
+
+
 
 ### Frontend
-- **Framework**: React 18.2.0
-- **Build Tool**: Vite 5.4.21
-- **Language**: TypeScript 5.4.0
+
+- **Framework**: React 18
+- **Build Tool**: Vite 5.4
+- **Language**: TypeScript
 - **Package Manager**: npm
+
+
 
 ## Quick Start
 
+
+
 ### Prerequisites
 
-- **Java 17+** (for backend)
-- **Node.js 18+** (for frontend)
-- **Maven 3.9+** (for backend builds)
-- **Snowstorm Server** (default: `https://snowstorm-training.snomedtools.org`)
+- **Java 21+**
+- **Node.js 18+** (Node 20+ recommended)
+- **Maven 3.9+**
+- Network access to a FHIR terminology server (default: public Ontoserver)
+
+
 
 ### Local Development
+
+
 
 #### 1. Start Backend
 
 ```bash
 cd backend
+# Optional: enable live AI (see Free Provider Presets below)
+export AI_ENABLED=true
+export AI_API_KEY=<your_key>
 mvn spring-boot:run
 ```
 
-Backend will start on `http://localhost:8080`
+Backend: `http://localhost:8080`
 
-**Development Mode**:
-- AI features disabled by default (`ai.enabled: false`)
-- Mock API key used (no OpenAI key required)
-- Mock responses returned for AI endpoints
+Defaults in `application.yml`:
+
+- `ai.enabled` defaults to **true** (set `AI_ENABLED=false` for mock/offline)
+- Hybrid FHIR / hierarchy uses **Ontoserver** (`FHIR_SERVER_URL`)
+
+
 
 #### 2. Start Frontend
 
@@ -80,178 +122,276 @@ Backend will start on `http://localhost:8080`
 cd frontend
 npm install
 npm run dev
+# On Apple Silicon, if Rollup arch errors appear:
+# arch -arm64 npm run dev
 ```
 
-Frontend will start on `http://localhost:5173`
-
-The Vite dev server is configured to proxy `/api` requests to the backend.
-
-**Apple Silicon (M1/M2/M3)**: If you see a Rollup error like `Cannot find module @rollup/rollup-darwin-x64` or `incompatible architecture (have 'arm64', need 'x86_64')`, run the dev server with native Node so it uses the arm64 build:  
-`arch -arm64 npm run dev`
+Frontend: `http://localhost:5173` (Vite proxies `/api` to the backend)
 
 ### Access Points
 
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:8080/api
-- **Swagger UI**: http://localhost:8080/swagger-ui.html
-- **OpenAPI Spec**: http://localhost:8080/api-docs
-- **Version Endpoint**: http://localhost:8080/api/version
+
+| Resource     | URL                                                                            |
+| ------------ | ------------------------------------------------------------------------------ |
+| Frontend     | [http://localhost:5173](http://localhost:5173)                                 |
+| Backend API  | [http://localhost:8080/api](http://localhost:8080/api)                         |
+| Swagger UI   | [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html) |
+| OpenAPI Spec | [http://localhost:8080/api-docs](http://localhost:8080/api-docs)               |
+| Version      | [http://localhost:8080/api/version](http://localhost:8080/api/version)         |
+
+
+
 
 ## API Endpoints
 
-### Term Matching
-- **POST** `/api/terms/match` - Match terms with SNOMED CT
 
-### AI Recommendations
-- **POST** `/api/ai/recommend` - Get AI recommendations for unmatched terms
-- **POST** `/api/ai/definitions` - Get AI definitions for terms
+
+### Term Matching
+
+- **POST** `/api/terms/match` — Match terms with SNOMED CT (`server` or `serverChain`)
+
+
+
+### AI Recommendations / Modeling
+
+- **POST** `/api/ai/recommend` — Hybrid / modeling suggestions  
+Modes: `UNMATCHED`, `ADDITIONAL`, `BOTH`, `MODELING`  
+UI flow uses `MODELING` for unmatched-term and new-term modeling
+- **POST** `/api/ai/definitions` — AI definitions for terms
+
+
 
 ### Code System Management
-- **POST** `/api/codesystems/build` - Build a code system from matched/recommended terms
-- **POST** `/api/codesystems/export` - Export code system (FHIR/CSV/Excel)
+
+- **POST** `/api/codesystems/build` — Build from matched + recommended / modeling proposals
+- **POST** `/api/codesystems/export` — Export FHIR / CSV / Excel
+
+
 
 ### Documentation & Info
-- **GET** `/api/version` - Get application version
-- **GET** `/docs` - Documentation information
-- **GET** `/swagger-ui.html` - Swagger UI
-- **GET** `/api-docs` - OpenAPI specification
+
+- **GET** `/api/version`
+- **GET** `/docs`
+- **GET** `/swagger-ui.html`
+- **GET** `/api-docs`
+
+
 
 ## Configuration
 
-### Backend Configuration (`application.yml`)
+
+
+### Backend (`application.yml` highlights)
 
 ```yaml
-# SNOMED CT Configuration
-snomed:
-  branch: MAIN
-  language: sv                    # Swedish
-  fallback-to-english: true
-
-# FHIR Server (Snowstorm)
-fhir:
-  server:
-    url: https://snowstorm-training.snomedtools.org/fhir
-
-# AI Configuration
 ai:
-  enabled: false                  # Set to true for production with API key
+  enabled: ${AI_ENABLED:true}
+  provider: ${AI_PROVIDER:gemini}
+
 spring:
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY}  # Required if ai.enabled=true
+      api-key: ${AI_API_KEY:${OPENAI_API_KEY:...}}
+      base-url: ${AI_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
+      chat:
+        options:
+          model: ${AI_MODEL:gemini-2.0-flash}
 
-# Recommendation System
+# Used by hybrid recommendations (lookup, hierarchy, $expand)
+fhir:
+  server:
+    url: ${FHIR_SERVER_URL:https://r4.ontoserver.csiro.au/fhir}
+
+ontoserver:
+  url: ${ONTOSERVER_URL:https://r4.ontoserver.csiro.au/fhir}
+
+snomed:
+  branch: MAIN
+  language: sv
+  fallback-to-english: true
+
 recommendation:
   use-hybrid: true
-  fuzzy-match:
-    min-similarity: 0.4
-    max-similarity: 0.6
   ai-fallback: true
 ```
 
+
+
 ### Environment Variables
 
-- `OPENAI_API_KEY` - OpenAI API key (required if `ai.enabled=true`)
-- `FHIR_SERVER_URL` - Snowstorm server URL
-- `PORT` - Server port (default: 8080)
-- `SERVER_URL` - Production server URL (for Swagger UI)
+
+| Variable          | Purpose                                                   |
+| ----------------- | --------------------------------------------------------- |
+| `AI_ENABLED`      | Live AI calls (`true`/`false`)                            |
+| `AI_PROVIDER`     | Label for logs (`gemini`, `ollama`, …)                    |
+| `AI_BASE_URL`     | OpenAI-compatible base URL                                |
+| `AI_MODEL`        | Model id                                                  |
+| `AI_API_KEY`      | Provider API key                                          |
+| `OPENAI_API_KEY`  | Legacy fallback if `AI_API_KEY` unset                     |
+| `FHIR_SERVER_URL` | FHIR base for hybrid recommendations (default Ontoserver) |
+| `ONTOSERVER_URL`  | Ontoserver for term matching                              |
+| `PORT`            | Server port (default `8080`)                              |
+| `SERVER_URL`      | Public URL for Swagger in production                      |
+
+
+
+
+### Free Provider Presets
+
+
+
+#### Gemini (hosted)
+
+```bash
+export AI_ENABLED=true
+export AI_PROVIDER=gemini
+export AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+export AI_MODEL=gemini-2.0-flash
+export AI_API_KEY=<your_gemini_key>
+```
+
+
+
+#### Ollama (local)
+
+```bash
+export AI_ENABLED=true
+export AI_PROVIDER=ollama
+export AI_BASE_URL=http://localhost:11434
+export AI_MODEL=llama3.1:8b
+export AI_API_KEY=ollama
+```
+
+Use `http://localhost:11434` **without** `/v1` — Spring AI appends `/v1/chat/completions`.
+
+See `documentation/FREE_AI_PROVIDER_SETUP.md` and `documentation/GEMINI_LOCAL_AND_RENDER_SETUP.md`.
+
+## SNOMED CT servers
+
+
+| Option in UI          | Notes                                                                  |
+| --------------------- | ---------------------------------------------------------------------- |
+| **Ontoserver (FHIR)** | Default selection; solid public FHIR R4                                |
+| Fallback chain        | Snowstorm → Ontoserver → Inera                                         |
+| Snowstorm             | Training instance may be unreachable                                   |
+| Inera                 | Swedish Terminologitjänsten; often not publicly callable without SITHS |
+
+
+Hybrid AI/modeling FHIR calls use `FHIR_SERVER_URL` (Ontoserver by default), independent of the match dropdown unless you align env vars.
 
 ## Deployment
 
-### Render.com Deployment
 
-The project includes `render.yaml` for automated deployment to Render.com.
 
-**Services**:
-- Backend: Java web service
-- Frontend: Static site
+### [Render.com](http://Render.com)
 
-See `documentation/RENDER_DEPLOYMENT.md` for detailed instructions.
+`render.yaml` defines the Java backend and static frontend. Start command uses  
+`backend/target/codesys-backend-0.2.1-SNAPSHOT.jar`.
 
-### Docker Deployment
+See `documentation/RENDER_DEPLOYMENT.md`.
 
-Dockerfiles are available for both backend and frontend:
-- `backend/Dockerfile` - Multi-stage Spring Boot build
-- `frontend/Dockerfile` - Nginx static server
+### Docker
+
+- `backend/Dockerfile` — multi-stage Spring Boot build (Java 21)
+- `frontend/Dockerfile` — Nginx static server
+
+
 
 ## Project Structure
 
 ```
 CodeSystemFactory/
 ├── backend/                 # Spring Boot application
-│   ├── src/main/java/      # Java source code
-│   ├── src/main/resources/ # Configuration files
-│   ├── pom.xml             # Maven dependencies
-│   └── Dockerfile          # Docker build
-├── frontend/               # React application
-│   ├── src/                # React components
-│   ├── package.json        # npm dependencies
-│   └── Dockerfile          # Docker build
-├── documentation/          # Comprehensive documentation
-├── render.yaml            # Render.com deployment config
-└── README.md              # This file
+│   ├── src/main/java/
+│   ├── src/main/resources/  # application.yml
+│   ├── pom.xml              # version 0.2.1-SNAPSHOT
+│   └── Dockerfile
+├── frontend/                # React + Vite
+│   ├── src/ui/              # App, MatchResults, AiRecommendations, …
+│   ├── package.json         # version 0.2.1
+│   └── Dockerfile
+├── documentation/           # Guides and design notes
+├── .cursor/skills/          # Agent skills (local AI, SNOMED, hybrid, Render)
+├── render.yaml
+└── README.md
 ```
+
+
 
 ## Documentation
 
-Comprehensive documentation is available in the `documentation/` directory:
+
 
 ### Getting Started
-- `LOCAL_DEVELOPMENT.md` - Local setup and testing guide
-- `RENDER_DEPLOYMENT.md` - Deployment to Render.com
 
-### Architecture & Design
-- `STATELESS_SOLUTION_DESIGN.md` - Stateless architecture overview
-- `ARCHITECTURE_ANALYSIS.md` - System architecture analysis
-- `HYBRID_RECOMMENDATION_SYSTEM.md` - Recommendation system design
+- `documentation/LOCAL_DEVELOPMENT.md`
+- `documentation/RUNNING_THE_APP.md`
+- `documentation/RENDER_DEPLOYMENT.md`
+- `documentation/FREE_AI_PROVIDER_SETUP.md`
+- `documentation/GEMINI_LOCAL_AND_RENDER_SETUP.md`
 
-### API Documentation
-- `API_DOCUMENTATION.md` - Complete API reference
-- `ENDPOINT_DATA_MAPPING.md` - Data source mapping for all endpoints
 
-### Features
-- `SWEDISH_LANGUAGE_SUPPORT.md` - Swedish language configuration
-- `AI_RECOMMENDATION_DATA_FLOW.md` - AI recommendation flow
-- `RECOMMENDATION_LOGIC_FLOW.md` - Detailed recommendation logic
-- `PUBLIC_SYNONYM_DATABASES.md` - Synonym database options
 
-### Deployment & Operations
-- `SNOWSTORM_DEPLOYMENT_RENDER.md` - Deploying Snowstorm to Render
-- `FREE_AI_API_OPTIONS.md` - Free AI API alternatives
-- `VERSION_MANAGEMENT.md` - Version management guide
+### Architecture & recommendations
+
+- `documentation/HYBRID_RECOMMENDATION_SYSTEM.md`
+- `documentation/AI_RECOMMENDATION_DATA_FLOW.md`
+- `documentation/RECOMMENDATION_LOGIC_FLOW.md`
+- `documentation/SERVER_SELECTION_DESIGN.md`
+- `documentation/STATELESS_SOLUTION_DESIGN.md`
+
+
+
+### API & operations
+
+- `documentation/API_DOCUMENTATION.md`
+- `documentation/ENDPOINT_DATA_MAPPING.md`
+- `documentation/VERSION_MANAGEMENT.md`
+- `documentation/DEPLOYMENT_GUIDE.md`
+
+
 
 ## Version Information
 
-- **Backend Version**: 0.0.2-SNAPSHOT (from `pom.xml`)
-- **Frontend Version**: 0.0.2 (from `package.json`)
-- **Version Endpoint**: `/api/version` returns current versions
+
+| Component                 | Version            |
+| ------------------------- | ------------------ |
+| Backend (`pom.xml`)       | `0.2.1-SNAPSHOT`   |
+| Frontend (`package.json`) | `0.2.1`            |
+| Version API               | `GET /api/version` |
+
+
+
 
 ## Development Notes
 
-### AI Features
 
-- **Development**: AI is disabled by default (`ai.enabled: false`)
-- **Mock Mode**: Returns mock responses when AI is disabled
-- **Production**: Set `ai.enabled: true` and provide `OPENAI_API_KEY`
 
-### SNOMED CT Integration
+### AI
 
-- **Default Server**: `snowstorm-training.snomedtools.org` (public instance)
-- **Language**: Configured for Swedish (`sv`) with English fallback
-- **Matching Threshold**: 0.75 (75% similarity) for direct matches
+- Live AI is on by default in config; provide `AI_API_KEY` (or disable with `AI_ENABLED=false`)
+- **MODELING** failures surface as HTTP 502 (not a silent empty fallback)
+- Build includes **all** proposals still listed in the UI (remove cards to exclude)
 
-### Synonym Database
 
-- **Current**: In-memory hardcoded mappings
-- **Future**: Can be enhanced to load from SNOMED CT descriptions
-- See `PUBLIC_SYNONYM_DATABASES.md` for alternatives
+
+### Matching & modeling
+
+- Match threshold: **0.75**
+- Unmatched modeling: Editorial Guide triage (existing / postcoordination / new)
+- New-term modeling for matched inputs **merges** with prior unmatched modeling by `inputTerm`
+- Local codes `LOCAL-*` are exported with source `MODELING_NEW_TERM`
+
+
 
 ## Contributing
 
-1. Ensure all tests pass
-2. Update documentation for new features
+1. Ensure tests pass (`backend`: `mvn test` with Java 21)
+2. Update documentation for behavioural changes
 3. Follow existing code style
-4. Update version numbers in `pom.xml` and `package.json`
+4. Bump versions in `pom.xml` and `package.json` (and jar references in `Dockerfile` / `render.yaml`)
+
+
 
 ## License
 
@@ -259,10 +399,10 @@ Comprehensive documentation is available in the `documentation/` directory:
 
 ## Support
 
-For issues, questions, or contributions, please refer to the documentation in the `documentation/` directory or open an issue in the repository.
+See `documentation/` or open an issue in the repository.
 
 ---
 
-**Last Updated**: 2024  
-**Backend Version**: 0.0.2-SNAPSHOT  
-**Frontend Version**: 0.0.2
+**Last Updated**: 2026-09-05  
+**Backend Version**: 0.2.1-SNAPSHOT  
+**Frontend Version**: 0.2.1

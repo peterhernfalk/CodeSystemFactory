@@ -6,20 +6,26 @@ spring:
     name: codesys-backend
   ai:
     openai:
-      # Provide a mock API key for development when OPENAI_API_KEY is not set
-      # Spring AI needs this to initialize, but it won't be used when ai.enabled=false
-      # Format: sk- followed by alphanumeric characters (OpenAI key format)
-      api-key: ${OPENAI_API_KEY:sk-mock-dev-key-1234567890123456789012345678901234567890}
+      # Provider-agnostic AI configuration via OpenAI-compatible endpoint.
+      # Recommended free hosted option:
+      # - Gemini: AI_PROVIDER=gemini, AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+      # Optional free local option:
+      # - Ollama: AI_PROVIDER=ollama, AI_BASE_URL=http://localhost:11434
+      api-key: ${AI_API_KEY:${OPENAI_API_KEY:sk-mock-dev-key-1234567890123456789012345678901234567890}}
+      base-url: ${AI_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
       chat:
         options:
-          model: gpt-4o-mini
+          model: ${AI_MODEL:gemini-2.0-flash}
 
 ai:
-  enabled: false
+  enabled: ${AI_ENABLED:true}
+  provider: ${AI_PROVIDER:gemini}
 
 fhir:
   server:
-    url: ${FHIR_SERVER_URL:https://snowstorm-training.snomedtools.org/fhir}
+    # Used by hybrid recommendations (concept lookup, hierarchy, ValueSet/$expand).
+    # Default to public Ontoserver — Snowstorm training is often unreachable.
+    url: ${FHIR_SERVER_URL:https://r4.ontoserver.csiro.au/fhir}
 
 # Ontoserver configuration (FHIR R4 terminology server)
 ontoserver:
@@ -55,6 +61,8 @@ recommendation:
     hop-depth: ${RECOMMENDATION_HIERARCHICAL_HOP_DEPTH:2}
   # Use AI agent as fallback for unmatched terms after other strategies
   ai-fallback: true
+  # When true, ADDITIONAL mode does not fill from the deterministic pool if the model returns nothing
+  ai-only-additional: ${RECOMMENDATION_AI_ONLY_ADDITIONAL:false}
 
 # SpringDoc OpenAPI configuration
 springdoc:

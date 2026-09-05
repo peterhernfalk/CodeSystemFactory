@@ -3,6 +3,7 @@
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/config/OpenApiConfig.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/controller/AiController.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/controller/AiRecommendationController.java
+/Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/controller/ApiExceptionHandler.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/controller/CodeSystemStatelessController.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/controller/DocumentationController.java
 /Users/peterhernfalk/Desktop/_Peter_Files/Projects/Rikard/Kodverksfabrik/Cursor/CodeSystemFactory/backend/src/main/java/com/example/codesys/controller/TermsController.java

@@ -2,7 +2,7 @@ import { API_BASE_URL } from './api'
 
 // Version information
 // This is read from package.json at build time via Vite
-export const FRONTEND_VERSION = import.meta.env.VITE_APP_VERSION || '0.1.2';
+export const FRONTEND_VERSION = import.meta.env.VITE_APP_VERSION || '0.2.1';
 
 // Fetch backend version from API
 export async function getBackendVersion(): Promise<string | null> {

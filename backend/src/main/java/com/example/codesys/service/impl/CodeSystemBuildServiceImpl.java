@@ -40,16 +40,22 @@ public class CodeSystemBuildServiceImpl implements CodeSystemBuildService {
                 .collect(Collectors.toList()));
         }
         
-        // Add suggested additional terms
+        // Add suggested additional terms (includes selected modeling proposals mapped by the UI)
         if (request.suggestedTerms() != null) {
             items.addAll(request.suggestedTerms().stream()
-                .map(st -> new CodeSystemBuildResponse.CodeSystemItem(
-                    st.snomedId(),
-                    st.term(),
-                    st.definition(),
-                    st.relations() != null ? st.relations() : List.of(),
-                    "AI_SUGGESTION"
-                ))
+                .map(st -> {
+                    String code = st.snomedId();
+                    String source = (code != null && code.toUpperCase().startsWith("LOCAL-"))
+                            ? "MODELING_NEW_TERM"
+                            : "AI_SUGGESTION";
+                    return new CodeSystemBuildResponse.CodeSystemItem(
+                        code,
+                        st.term(),
+                        st.definition(),
+                        st.relations() != null ? st.relations() : List.of(),
+                        source
+                    );
+                })
                 .collect(Collectors.toList()));
         }
         

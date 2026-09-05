@@ -1,6 +1,6 @@
 # codesys-backend
 
-Run with Java 17 + Maven:
+Run with Java 21 + Maven:
 ```
 cd backend
 mvn spring-boot:run

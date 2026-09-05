@@ -7,6 +7,7 @@ import com.example.codesys.service.HybridRecommendationService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import jakarta.annotation.PostConstruct;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,16 +20,28 @@ public class AiRecommendationServiceImpl implements AiRecommendationService {
     private final ChatClient chatClient;
     private final boolean enabled;
     private final boolean useHybrid;
+    private final String provider;
+    private final String model;
 
     public AiRecommendationServiceImpl(
             HybridRecommendationService hybridService,
             @Value("${ai.enabled:true}") boolean enabled,
             @Value("${recommendation.use-hybrid:true}") boolean useHybrid,
+            @Value("${ai.provider:gemini}") String provider,
+            @Value("${spring.ai.openai.chat.options.model:unknown}") String model,
             ChatClient.Builder chatClientBuilder) {
         this.hybridService = hybridService;
         this.enabled = enabled;
         this.useHybrid = useHybrid;
+        this.provider = provider;
+        this.model = model;
         this.chatClient = chatClientBuilder.build();
+    }
+
+    @PostConstruct
+    void logAiProviderConfig() {
+        System.out.println("INFO: AI provider configured as '" + provider + "', model='" + model
+                + "', ai.enabled=" + enabled);
     }
 
     @Override

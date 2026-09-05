@@ -176,7 +176,7 @@ export function MatchResults({
               cursor: recommendLoading ? 'not-allowed' : 'pointer'
             }}
           >
-            {recommendLoading ? 'Getting AI Recommendations...' : 'Get AI Recommendations for Unmatched Terms'}
+            {recommendLoading ? 'Getting Editorial Guide modeling...' : 'Model unmatched terms (SNOMED Editorial Guide)'}
           </button>
         </div>
       )}

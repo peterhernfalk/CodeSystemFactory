@@ -6,7 +6,7 @@ services:
     region: frankfurt
     plan: free
     buildCommand: cd backend && mvn clean package -DskipTests
-    startCommand: java -jar backend/target/codesys-backend-0.1.2-SNAPSHOT.jar
+    startCommand: java -jar backend/target/codesys-backend-0.2.1-SNAPSHOT.jar
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -18,10 +18,20 @@ services:
         # This will be set automatically to the backend URL (e.g., https://codesys-backend.onrender.com)
       - key: OPENAI_API_KEY
         sync: false  # Set this in Render dashboard
+      - key: AI_ENABLED
+        value: "true"
+      - key: AI_PROVIDER
+        value: gemini
+      - key: AI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai
+      - key: AI_MODEL
+        value: gemini-2.0-flash
+      - key: AI_API_KEY
+        sync: false  # Preferred key variable for Gemini/OpenAI-compatible providers
       - key: FHIR_SERVER_URL
         value: https://snowstorm-training.snomedtools.org/fhir
       - key: JAVA_VERSION
-        value: 17
+        value: 21
 
   # Frontend Service (Static Site)
   - type: web

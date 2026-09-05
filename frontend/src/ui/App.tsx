@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { MatchResults } from './MatchResults'
 import { AiRecommendations } from './AiRecommendations'
 import { CodeSystemBuilder } from './CodeSystemBuilder'
 import { API_BASE_URL } from '../config/api'
 import { FRONTEND_VERSION, getBackendVersion } from '../config/version'
+import { mergeByInputTermKey, mergeChecklist, renumberLocalCodes } from './modelingMerge'
 
 interface MatchedTerm {
   inputTerm: string
@@ -41,7 +42,48 @@ interface SuggestedTerm {
   relations: string[]
 }
 
-type RecommendationMode = 'UNMATCHED' | 'ADDITIONAL' | 'BOTH'
+interface ExistingSnomedAddition {
+  snomedId: string
+  pt: string
+  fsn: string
+  whyAdd: string
+  relationsToExisting: string[]
+  confidence: number
+  inputTerm?: string
+}
+
+interface ParentSuggestion {
+  snomedId: string
+  term: string
+}
+
+interface DefiningAttribute {
+  attribute: string
+  value: string
+  valueSnomedId: string
+}
+
+interface CandidateNewTerm {
+  proposedPt: string
+  proposedFsn: string
+  semanticTag: string
+  gapType: string
+  gapJustification: string
+  proximalPrimitiveParentSuggestions: ParentSuggestion[]
+  definingAttributes: DefiningAttribute[]
+  postcoordinationCandidate: boolean
+  exampleExpressions: string[]
+  synonymsSv: string[]
+  synonymsEn: string[]
+  usageExample: string
+  uncertaintyNotes: string
+  confidence: number
+  localCode: string
+  inputTerm?: string
+  decision?: string
+}
+
+type RecommendationMode = 'UNMATCHED' | 'ADDITIONAL' | 'BOTH' | 'MODELING'
 
 interface CodeSystemMetadata {
   name: string
@@ -57,7 +99,13 @@ export default function App(){
   const [unmatchedTerms, setUnmatchedTerms] = useState<UnmatchedTerm[]>([])
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [suggestedAdditional, setSuggestedAdditional] = useState<SuggestedTerm[]>([])
+  const [existingAdditions, setExistingAdditions] = useState<ExistingSnomedAddition[]>([])
+  const [candidateNewTerms, setCandidateNewTerms] = useState<CandidateNewTerm[]>([])
+  const [modelingChecklist, setModelingChecklist] = useState<string[]>([])
+  const [selectedRecommendations, setSelectedRecommendations] = useState<Set<number>>(new Set())
   const [selectedSuggested, setSelectedSuggested] = useState<Set<number>>(new Set())
+  const [selectedExistingAdditions, setSelectedExistingAdditions] = useState<Set<number>>(new Set())
+  const [selectedCandidateNewTerms, setSelectedCandidateNewTerms] = useState<Set<number>>(new Set())
   const [codeSystem, setCodeSystem] = useState<any>(null)
   const [metadata, setMetadata] = useState<CodeSystemMetadata>({
     name: 'Swedish Cardiology Terms',
@@ -68,24 +116,61 @@ export default function App(){
   })
   const [showMetadataForm, setShowMetadataForm] = useState(false)
   const [backendVersion, setBackendVersion] = useState<string | null>(null)
-  const [selectedServer, setSelectedServer] = useState<'snowstorm' | 'ontoserver' | 'inera' | 'fallback_chain'>('fallback_chain')
+  const [selectedServer, setSelectedServer] = useState<'snowstorm' | 'ontoserver' | 'inera' | 'fallback_chain'>('ontoserver')
   const [isMatchLoading, setIsMatchLoading] = useState(false)
   const [isAiLoading, setIsAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const resultsGeneration = useRef(0)
 
   // Fetch backend version on mount
   useEffect(() => {
     getBackendVersion().then(setBackendVersion)
   }, [])
 
+  const clearAiSelections = () => {
+    setSelectedRecommendations(new Set())
+    setSelectedSuggested(new Set())
+    setSelectedExistingAdditions(new Set())
+    setSelectedCandidateNewTerms(new Set())
+  }
+
+  const hideResultsBelowTerms = () => {
+    resultsGeneration.current += 1
+    setMatchedTerms([])
+    setUnmatchedTerms([])
+    setRecommendations([])
+    setSuggestedAdditional([])
+    setExistingAdditions([])
+    setCandidateNewTerms([])
+    setModelingChecklist([])
+    clearAiSelections()
+    setCodeSystem(null)
+    setShowMetadataForm(false)
+    setAiError(null)
+    setIsMatchLoading(false)
+    setIsAiLoading(false)
+  }
+
+  const handleTermsTextChange = (value: string) => {
+    setTermsText(value)
+    hideResultsBelowTerms()
+  }
+
   const callMatch = async () => {
     const terms = termsText.split(/\n+/).map(t => t.trim()).filter(Boolean)
+    const requestId = ++resultsGeneration.current
 
     // Clear previous results immediately while new matching is running
     setMatchedTerms([])
     setUnmatchedTerms([])
     setRecommendations([])
     setSuggestedAdditional([])
+    setExistingAdditions([])
+    setCandidateNewTerms([])
+    setModelingChecklist([])
+    clearAiSelections()
+    setCodeSystem(null)
+    setShowMetadataForm(false)
     setAiError(null)
     setIsMatchLoading(true)
 
@@ -104,28 +189,58 @@ export default function App(){
       }
 
       const data = await res.json()
+      if (requestId !== resultsGeneration.current) return
       setMatchedTerms(data.matched || [])
       setUnmatchedTerms(data.unmatched || [])
     } catch (error) {
+      if (requestId !== resultsGeneration.current) return
       setAiError(error instanceof Error ? error.message : 'Failed to match terms.')
       setMatchedTerms([])
       setUnmatchedTerms([])
     } finally {
-      setIsMatchLoading(false)
+      if (requestId === resultsGeneration.current) {
+        setIsMatchLoading(false)
+      }
     }
   }
 
-  const callAiRecommend = async (mode: RecommendationMode) => {
-    // Allow AI recommendations even if all terms are matched (for additional suggestions)
-    if (matchedTerms.length === 0) {
+  const callAiRecommend = async (
+    mode: RecommendationMode,
+    options?: { modelingScope?: 'unmatched' | 'matched' | 'all' }
+  ) => {
+    const modelingScope = options?.modelingScope ?? 'all'
+    const mergeModeling = mode === 'MODELING' && modelingScope === 'matched'
+
+    const unmatchedTermList = mode === 'ADDITIONAL'
+      ? []
+      : mode === 'MODELING'
+        ? modelingScope === 'unmatched'
+          ? unmatchedTerms.map(u => u.inputTerm)
+          : modelingScope === 'matched'
+            ? matchedTerms.map(m => m.inputTerm)
+            : termsText.split(/\n+/).map(t => t.trim()).filter(Boolean)
+        : unmatchedTerms.map(u => u.inputTerm)
+    const matchedSnomedIds = matchedTerms.map(m => m.snomedId)
+
+    if (mode === 'MODELING') {
+      if (modelingScope === 'unmatched' && unmatchedTermList.length === 0) {
+        setAiError('No unmatched terms to model.')
+        return
+      }
+      if (modelingScope === 'matched' && unmatchedTermList.length === 0) {
+        setAiError('Match at least one term before requesting new-term modeling suggestions.')
+        return
+      }
+      if (unmatchedTermList.length === 0 && matchedSnomedIds.length === 0) {
+        setAiError('Provide terms to model before requesting modeling suggestions.')
+        return
+      }
+    } else if (matchedTerms.length === 0) {
       setAiError('Match at least one term before requesting AI recommendations.')
       return
     }
-    
-    const unmatchedTermList = mode === 'ADDITIONAL'
-      ? []
-      : unmatchedTerms.map(u => u.inputTerm)
-    const matchedSnomedIds = matchedTerms.map(m => m.snomedId)
+
+    const requestId = ++resultsGeneration.current
 
     setAiError(null)
     setIsAiLoading(true)
@@ -146,7 +261,18 @@ export default function App(){
         try {
           const errorText = await res.text()
           if (errorText) {
-            message = `${message}: ${errorText}`
+            try {
+              const errorJson = JSON.parse(errorText)
+              if (errorJson.error) {
+                message = errorJson.error
+              } else if (errorJson.message) {
+                message = errorJson.message
+              } else {
+                message = `${message}: ${errorText}`
+              }
+            } catch {
+              message = `${message}: ${errorText}`
+            }
           }
         } catch {
           // Keep the default message if error payload cannot be read.
@@ -155,34 +281,94 @@ export default function App(){
       }
 
       const data = await res.json()
+      if (requestId !== resultsGeneration.current) return
       const nextRecommendations = data.recommendations || []
       const nextSuggestedAdditional = data.suggestedAdditional || []
-      setRecommendations(nextRecommendations)
-      setSuggestedAdditional(nextSuggestedAdditional)
+      const nextExistingAdditions = data.existingSnomedAdditions || []
+      const nextCandidateNewTerms = (data.candidateNewTerms || []).map((t: Omit<CandidateNewTerm, 'localCode'>, index: number) => ({
+        ...t,
+        localCode: `LOCAL-${String(index + 1).padStart(3, '0')}`
+      }))
+      const nextModelingChecklist = data.modelingReviewChecklist || []
 
-      if (nextRecommendations.length === 0 && nextSuggestedAdditional.length === 0) {
+      if (mergeModeling) {
+        // Keep unmatched-modeling results; append new-term suggestions for matched inputs.
+        setExistingAdditions(prev =>
+          mergeByInputTermKey(
+            prev,
+            nextExistingAdditions,
+            a => a.inputTerm,
+            a => `${(a.inputTerm || '').toLowerCase()}|${a.snomedId || ''}|${(a.pt || '').toLowerCase()}`
+          )
+        )
+        setCandidateNewTerms(prev =>
+          renumberLocalCodes(
+            mergeByInputTermKey(
+              prev,
+              nextCandidateNewTerms,
+              t => t.inputTerm,
+              t => `${(t.inputTerm || '').toLowerCase()}|${(t.proposedPt || '').toLowerCase()}|${(t.decision || '').toLowerCase()}`
+            )
+          )
+        )
+        setModelingChecklist(prev => mergeChecklist(prev, nextModelingChecklist))
+        // Do not clear prior selections on merge.
+      } else {
+        setRecommendations(nextRecommendations)
+        setSuggestedAdditional(nextSuggestedAdditional)
+        setExistingAdditions(nextExistingAdditions)
+        setCandidateNewTerms(nextCandidateNewTerms)
+        setModelingChecklist(nextModelingChecklist)
+        clearAiSelections()
+      }
+
+      const hasNewModeling =
+        nextExistingAdditions.length > 0 || nextCandidateNewTerms.length > 0
+      const hasAnyPayload =
+        nextRecommendations.length > 0 ||
+        nextSuggestedAdditional.length > 0 ||
+        hasNewModeling
+
+      if (!hasAnyPayload && !(mergeModeling && (existingAdditions.length > 0 || candidateNewTerms.length > 0))) {
         setAiError(
-          mode === 'UNMATCHED'
-            ? 'No recommendations were found for unmatched terms.'
-            : 'No additional suggestions were found for the current matched terms.'
+          mode === 'MODELING'
+            ? modelingScope === 'unmatched'
+              ? 'No Editorial Guide modeling suggestions were found for unmatched terms.'
+              : modelingScope === 'matched'
+                ? 'No new-term modeling suggestions were found for the matched terms.'
+                : 'No modeling suggestions were found for the current term set.'
+            : mode === 'UNMATCHED'
+              ? 'No recommendations were found for unmatched terms.'
+              : 'No additional suggestions were found for the current matched terms.'
         )
       }
     } catch (error) {
+      if (requestId !== resultsGeneration.current) return
       const message = error instanceof Error ? error.message : 'Failed to fetch AI recommendations.'
       setAiError(message)
-      setRecommendations([])
-      setSuggestedAdditional([])
+      if (!mergeModeling) {
+        setRecommendations([])
+        setSuggestedAdditional([])
+        setExistingAdditions([])
+        setCandidateNewTerms([])
+        setModelingChecklist([])
+        clearAiSelections()
+      }
     } finally {
-      setIsAiLoading(false)
+      if (requestId === resultsGeneration.current) {
+        setIsAiLoading(false)
+      }
     }
   }
 
   const callAiRecommendForUnmatched = async () => {
-    await callAiRecommend('UNMATCHED')
+    // Unmatched terms → Editorial Guide modeling (existing / postcoordination / new).
+    await callAiRecommend('MODELING', { modelingScope: 'unmatched' })
   }
 
-  const callAiRecommendForAdditional = async () => {
-    await callAiRecommend('ADDITIONAL')
+  const callAiRecommendForModeling = async () => {
+    // Matched terms → additional modeling; merged with prior unmatched modeling results.
+    await callAiRecommend('MODELING', { modelingScope: 'matched' })
   }
 
   const buildCodeSystem = async () => {
@@ -190,6 +376,7 @@ export default function App(){
       setShowMetadataForm(true)
       return
     }
+    const requestId = resultsGeneration.current
 
     const matchedForBuild = matchedTerms.map(m => ({
       inputTerm: m.inputTerm,
@@ -208,14 +395,44 @@ export default function App(){
       relations: r.relations
     }))
 
-    const selectedSuggestedForBuild = Array.from(selectedSuggested).map(i => ({
-      snomedId: suggestedAdditional[i].snomedId,
-      term: suggestedAdditional[i].term,
-      fsn: suggestedAdditional[i].fsn,
-      reason: suggestedAdditional[i].reason,
-      definition: suggestedAdditional[i].definition,
-      relations: suggestedAdditional[i].relations
-    }))
+    const selectedSuggestedForBuild = [
+      ...suggestedAdditional.map(s => ({
+        snomedId: s.snomedId,
+        term: s.term,
+        fsn: s.fsn,
+        reason: s.reason,
+        definition: s.definition,
+        relations: s.relations
+      })),
+      ...existingAdditions.map(a => ({
+        snomedId: a.snomedId,
+        term: a.pt,
+        fsn: a.fsn,
+        reason: a.whyAdd,
+        definition: a.whyAdd,
+        relations: a.relationsToExisting || []
+      })),
+      ...candidateNewTerms.map((t, i) => {
+        const localCode = (t.localCode || '').trim() || `LOCAL-${String(i + 1).padStart(3, '0')}`
+        const relations = [
+          t.semanticTag ? `semantic-tag: ${t.semanticTag}` : '',
+          t.gapType ? `gap-type: ${t.gapType}` : '',
+          ...(t.proximalPrimitiveParentSuggestions || []).map(p =>
+            `parent: ${p.term}${p.snomedId ? ` (${p.snomedId})` : ''}`
+          ),
+          ...(t.synonymsSv || []).map(s => `synonym-sv: ${s}`),
+          ...(t.synonymsEn || []).map(s => `synonym-en: ${s}`)
+        ].filter(Boolean)
+        return {
+          snomedId: localCode,
+          term: t.proposedPt,
+          fsn: t.proposedFsn,
+          reason: t.gapJustification || 'Modeling candidate new term',
+          definition: t.usageExample || t.gapJustification || t.proposedFsn,
+          relations
+        }
+      })
+    ]
 
     const res = await fetch(`${API_BASE_URL}/codesystems/build`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
@@ -227,6 +444,7 @@ export default function App(){
       })
     })
     const data = await res.json()
+    if (requestId !== resultsGeneration.current) return
     setCodeSystem(data.codeSystem)
     setShowMetadataForm(false)
   }
@@ -300,7 +518,7 @@ export default function App(){
         <label><strong>Enter terms (one per line):</strong></label>
         <textarea 
           value={termsText} 
-          onChange={e=>setTermsText(e.target.value)} 
+          onChange={e=>handleTermsTextChange(e.target.value)} 
           rows={8} 
           style={{width:'100%', marginTop: 8, padding: 8, fontFamily: 'monospace'}} 
         />
@@ -319,9 +537,9 @@ export default function App(){
                 cursor: 'pointer'
               }}
             >
-              <option value="fallback_chain">Fallback: Snowstorm → Ontoserver → Inera</option>
-              <option value="snowstorm">Snowstorm (Default)</option>
               <option value="ontoserver">Ontoserver (FHIR)</option>
+              <option value="fallback_chain">Fallback: Snowstorm → Ontoserver → Inera</option>
+              <option value="snowstorm">Snowstorm</option>
               <option value="inera">Inera Terminologitjänsten (Swedish)</option>
             </select>
           </label>
@@ -361,26 +579,24 @@ export default function App(){
             </div>
           )}
           
-          {/* Show build button if we have matched terms, even without recommendations */}
-          {matchedTerms.length > 0 && (recommendations.length === 0 && suggestedAdditional.length === 0) && !showMetadataForm && (
+          {/* Next step after match: model matched terms (unmatched modeling is on the unmatched table). */}
+          {matchedTerms.length > 0 && !showMetadataForm && (
             <div style={{marginTop: 24, padding: 16, border: '1px solid #ddd', borderRadius: 8, backgroundColor: '#f8f9fa'}}>
-              <h3>Ready to Build Code System</h3>
+              <h3>Next: New-Term Modeling</h3>
               <p style={{fontSize: '0.9em', color: '#666', marginBottom: 16}}>
-                You have {matchedTerms.length} matched term{matchedTerms.length !== 1 ? 's' : ''}. 
-                {unmatchedTerms.length > 0 && (
-                  <> You can get AI recommendations for {unmatchedTerms.length} unmatched term{unmatchedTerms.length !== 1 ? 's' : ''}, or build the code system with just the matched terms.</>
-                )}
-                {unmatchedTerms.length === 0 && (
-                  <> All terms are matched. You can build the code system now or get AI recommendations for additional suggestions.</>
-                )}
+                You have {matchedTerms.length} matched term{matchedTerms.length !== 1 ? 's' : ''}.
+                {unmatchedTerms.length > 0
+                  ? <> First model unmatched terms from the unmatched table, then use this button for matched-term modeling. </>
+                  : <> Use this button for Editorial Guide modeling of matched terms. </>}
+                Suggestions are merged below; build from the AI Recommendations section.
               </p>
               <div style={{display: 'flex', gap: 8}}>
                 <button
-                  onClick={callAiRecommendForAdditional}
+                  onClick={callAiRecommendForModeling}
                   disabled={isAiLoading}
                   style={{
                     padding: '10px 20px',
-                    backgroundColor: isAiLoading ? '#6c757d' : '#007bff',
+                    backgroundColor: isAiLoading ? '#6c757d' : '#17a2b8',
                     color: 'white',
                     border: 'none',
                     borderRadius: 4,
@@ -389,29 +605,20 @@ export default function App(){
                   }}
                 >
                   {isAiLoading
-                    ? 'Getting AI Recommendations...'
-                    : 'Get AI Recommendations for Additional Suggestions'}
-                </button>
-                <button
-                  onClick={buildCodeSystem}
-                  style={{
-                    padding: '10px 20px',
-                    backgroundColor: '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 4,
-                    cursor: 'pointer',
-                    fontSize: '1em'
-                  }}
-                >
-                  Build Code System with Matched Terms
+                    ? 'Getting Editorial Guide modeling...'
+                    : 'Find New-Term Modeling Suggestions'}
                 </button>
               </div>
             </div>
           )}
 
-          {/* Show metadata form when showMetadataForm is true, even without recommendations */}
-          {showMetadataForm && (recommendations.length === 0 && suggestedAdditional.length === 0) && (
+          {/* Fallback metadata only when building without an AI results panel */}
+          {showMetadataForm && (
+            recommendations.length === 0 &&
+            suggestedAdditional.length === 0 &&
+            existingAdditions.length === 0 &&
+            candidateNewTerms.length === 0
+          ) && (
             <div style={{marginTop: 24, border: '2px solid #007bff', padding: 16, borderRadius: 8, backgroundColor: '#f0f8ff'}}>
               <h3>Code System Metadata</h3>
               <p style={{fontSize: '0.9em', color: '#666', marginBottom: 16}}>
@@ -509,15 +716,26 @@ export default function App(){
         </>
       )}
 
-      {(recommendations.length > 0 || suggestedAdditional.length > 0) && (
+      {(recommendations.length > 0 || suggestedAdditional.length > 0 || existingAdditions.length > 0 || candidateNewTerms.length > 0 || modelingChecklist.length > 0) && (
         <>
           <AiRecommendations 
             recommendations={recommendations}
             suggestedAdditional={suggestedAdditional}
+            existingAdditions={existingAdditions}
+            candidateNewTerms={candidateNewTerms}
+            modelingChecklist={modelingChecklist}
+            selectedRecommendations={selectedRecommendations}
             selectedSuggested={selectedSuggested}
+            selectedExistingAdditions={selectedExistingAdditions}
+            selectedCandidateNewTerms={selectedCandidateNewTerms}
             onRecommendationsChange={setRecommendations}
             onSuggestedChange={setSuggestedAdditional}
+            onExistingAdditionsChange={setExistingAdditions}
+            onCandidateNewTermsChange={setCandidateNewTerms}
+            onSelectedRecommendationsChange={setSelectedRecommendations}
             onSelectedSuggestedChange={setSelectedSuggested}
+            onSelectedExistingAdditionsChange={setSelectedExistingAdditions}
+            onSelectedCandidateNewTermsChange={setSelectedCandidateNewTerms}
             onBuild={buildCodeSystem}
           />
           
